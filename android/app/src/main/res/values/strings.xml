@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">XOCRISK</string>
+    <string name="title_activity_main">XOCRISK</string>
+    <string name="package_name">com.xocrisk.app</string>
+    <string name="custom_url_scheme">com.xocrisk.app</string>
+</resources>

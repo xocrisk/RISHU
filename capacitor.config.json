@@ -1,0 +1,13 @@
+{
+  "appId": "com.xocrisk.app",
+  "appName": "XOCRISK",
+  "webDir": "www",
+  "backgroundColor": "#111111",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  }
+}

@@ -1,0 +1,433 @@
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { Pool } from "pg";
+import { normalizeIndianMobile } from "@xocrisk/core";
+import {
+  createOtp,
+  hashPassword,
+  hashOtp,
+  hashSessionToken,
+  matchesHash,
+  newSessionToken,
+  normalizeEmail,
+  verifyPassword,
+} from "./security.js";
+import type { SmtpConfig } from "./config.js";
+import nodemailer from "nodemailer";
+
+type AuthUser = {
+  id: string;
+  email: string | null;
+  mobile: string | null;
+  full_name: string | null;
+  college: string | null;
+};
+
+type SignupBody = {
+  fullName: string;
+  email: string;
+  mobile: string;
+  college: string;
+  lpuRegistrationNumber?: string;
+  password: string;
+  adultConsent: true;
+};
+
+declare module "fastify" {
+  interface FastifyRequest {
+    authUser: AuthUser | null;
+    sessionHash: string | null;
+  }
+}
+
+const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
+const temporarySessionLifetimeMs = 12 * 60 * 60 * 1000;
+const signupSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["fullName", "email", "mobile", "college", "password", "adultConsent"],
+    properties: {
+      fullName: { type: "string", minLength: 2, maxLength: 120 },
+      email: { type: "string", minLength: 3, maxLength: 254 },
+      mobile: { type: "string", minLength: 10, maxLength: 32 },
+      college: { type: "string", minLength: 2, maxLength: 160 },
+      lpuRegistrationNumber: { type: "string", pattern: "^\\d{8}$" },
+      password: { type: "string", minLength: 10, maxLength: 128 },
+      adultConsent: { const: true },
+    },
+  },
+} as const;
+
+const loginSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    anyOf: [
+      { required: ["identifier", "password"] },
+      { required: ["email", "password"] },
+    ],
+    properties: {
+      identifier: { type: "string", minLength: 1, maxLength: 254 },
+      email: { type: "string", minLength: 3, maxLength: 254 },
+      password: { type: "string", minLength: 1, maxLength: 128 },
+      rememberMe: { type: "boolean" },
+    },
+  },
+} as const;
+
+function sessionToken(request: FastifyRequest): string | null {
+  const authorization = request.headers.authorization;
+  if (authorization?.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length).trim();
+    if (token) return token;
+  }
+  const match = request.headers.cookie?.match(/(?:^|;\s*)xocrisk_session=([A-Za-z0-9_-]+)(?:;|$)/);
+  return match?.[1] ?? null;
+}
+
+function publicUser(user: AuthUser) {
+  return {
+    id: user.id,
+    email: user.email,
+    mobile: user.mobile,
+    fullName: user.full_name,
+    college: user.college,
+  };
+}
+
+export async function createSession(
+  pool: Pool,
+  userId: string,
+  secret: string,
+  lifetimeMs = sessionLifetimeMs,
+) {
+  const token = newSessionToken();
+  const tokenHash = hashSessionToken(token, secret);
+  const expiresAt = new Date(Date.now() + lifetimeMs);
+  await pool.query(
+    "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+    [userId, tokenHash, expiresAt],
+  );
+  return token;
+}
+
+export async function registerAuthRoutes(
+  app: FastifyInstance,
+  { pool, sessionSecret, environment, smtp }: { pool: Pool; sessionSecret: string; environment: string; smtp?: SmtpConfig },
+): Promise<void> {
+  app.decorateRequest("authUser", null);
+  app.decorateRequest("sessionHash", null);
+
+  app.addHook("preHandler", async (request) => {
+    if (request.method === "OPTIONS") return;
+    const token = sessionToken(request);
+    if (!token) return;
+    const tokenHash = hashSessionToken(token, sessionSecret);
+    const result = await pool.query<AuthUser>(
+      `SELECT u.id, u.email, u.mobile, u.full_name, u.college
+       FROM auth_sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = $1 AND s.expires_at > now()
+         AND u.deletion_requested_at IS NULL`,
+      [tokenHash],
+    );
+    if (result.rows[0]) {
+      request.authUser = result.rows[0];
+      request.sessionHash = tokenHash;
+    }
+  });
+
+  app.post<{ Body: SignupBody }>(
+    "/v1/auth/signup",
+    { schema: signupSchema, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+      const email = normalizeEmail(request.body.email);
+      const mobile = normalizeIndianMobile(request.body.mobile);
+      const fullName = request.body.fullName.trim();
+      const college = request.body.college.trim();
+      const registrationNumber = request.body.lpuRegistrationNumber?.trim() ?? "";
+      if (!email) return reply.code(400).send({ message: "Enter a valid email address." });
+      if (!mobile) return reply.code(400).send({ message: "Enter a valid 10-digit Indian mobile number." });
+      if (fullName.length < 2 || college.length < 2) {
+        return reply.code(400).send({ message: "Enter your name and college." });
+      }
+      const isLpu = college === "Lovely Professional University (LPU)";
+      if ((isLpu && !/^\d{8}$/.test(registrationNumber)) || (!isLpu && registrationNumber)) {
+        return reply.code(400).send({ message: "Check the LPU registration number and try again." });
+      }
+
+      const passwordHash = await hashPassword(request.body.password);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const created = await client.query<AuthUser>(
+          `INSERT INTO users
+             (email, mobile, password_hash, adult_consent_at, full_name, college, lpu_registration_number)
+           VALUES ($1, $2, $3, now(), $4, $5, $6)
+           RETURNING id, email, mobile, full_name, college`,
+          [email, mobile, passwordHash, fullName, college, isLpu ? registrationNumber : null],
+        );
+        const user = created.rows[0];
+        const token = newSessionToken();
+        const tokenHash = hashSessionToken(token, sessionSecret);
+        await client.query(
+          "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+          [user.id, tokenHash, new Date(Date.now() + sessionLifetimeMs)],
+        );
+        await client.query("COMMIT");
+        return reply
+          .header("Set-Cookie", sessionCookie(token, environment))
+          .code(201)
+          .send({ user: publicUser(user) });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+          return reply.code(409).send({ message: "An account with that email or mobile number already exists." });
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.post<{ Body: { identifier?: string; email?: string; password: string; rememberMe?: boolean } }>(
+    "/v1/auth/login",
+    { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const identifier = request.body.identifier ?? request.body.email ?? "";
+      const email = normalizeEmail(identifier);
+      const mobile = normalizeIndianMobile(identifier);
+      if (!email && !mobile) {
+        return reply.code(401).send({ message: "Mobile number, email, or password is incorrect." });
+      }
+      const result = await pool.query<AuthUser & { password_hash: string | null }>(
+        `SELECT id, email, mobile, full_name, college, password_hash
+         FROM users
+         WHERE (lower(email) = $1 OR mobile = $2) AND deletion_requested_at IS NULL
+         LIMIT 1`,
+        [email, mobile],
+      );
+      const user = result.rows[0];
+      if (!await verifyPassword(request.body.password, user?.password_hash)) {
+        return reply.code(401).send({ message: "Mobile number, email, or password is incorrect." });
+      }
+      const linkToken = cookieValue(request.headers.cookie, "xocrisk_oauth_link");
+      if (linkToken) {
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const pendingLink = await client.query<{ provider: "google" | "microsoft"; provider_subject: string }>(
+            `DELETE FROM oauth_link_attempts
+             WHERE token_hash = $1 AND expires_at > now()
+             RETURNING provider, provider_subject`,
+            [hashSessionToken(linkToken, sessionSecret)],
+          );
+          if (!pendingLink.rows[0]) {
+            await client.query("ROLLBACK");
+            return reply
+              .header("Set-Cookie", oauthLinkCookie("", environment, true))
+              .code(410)
+              .send({ message: "That provider link expired. Start sign-in with the provider again." });
+          }
+          await client.query(
+            "INSERT INTO oauth_accounts (provider, provider_subject, user_id) VALUES ($1, $2, $3)",
+            [pendingLink.rows[0].provider, pendingLink.rows[0].provider_subject, user.id],
+          );
+          const token = newSessionToken();
+          const tokenHash = hashSessionToken(token, sessionSecret);
+          const rememberMe = request.body.rememberMe === true;
+          await client.query(
+            "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+            [user.id, tokenHash, new Date(Date.now() + (rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs))],
+          );
+          await client.query("COMMIT");
+          return reply
+            .header("Set-Cookie", [
+              sessionCookie(token, environment, rememberMe),
+              expiredSessionCookie(environment),
+              oauthLinkCookie("", environment, true),
+            ])
+            .send({ user: publicUser(user), providerLinked: Boolean(pendingLink.rows[0]) });
+        } catch (error) {
+          await client.query("ROLLBACK");
+          if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+            return reply
+              .header("Set-Cookie", oauthLinkCookie("", environment, true))
+              .code(409)
+              .send({ message: "That provider is already linked to another XOCRISK account." });
+          }
+          throw error;
+        } finally {
+          client.release();
+        }
+      }
+      const rememberMe = request.body.rememberMe === true;
+      const token = await createSession(
+        pool,
+        user.id,
+        sessionSecret,
+        rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs,
+      );
+      return reply.header("Set-Cookie", sessionCookie(token, environment, rememberMe)).send({ user: publicUser(user) });
+    },
+  );
+
+  app.post<{ Body: { email: string } }>(
+    "/v1/auth/password-reset/request",
+    {
+      schema: {
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["email"],
+          properties: { email: { type: "string", minLength: 3, maxLength: 254 } },
+        },
+      },
+      config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      if (!smtp) return reply.code(503).send({ message: "Email password recovery is not configured." });
+      const email = normalizeEmail(request.body.email);
+      if (!email) return reply.code(202).send({ message: "If an account exists for that email, a reset code has been sent." });
+
+      const user = await pool.query<{ id: string }>(
+        "SELECT id FROM users WHERE lower(email) = $1 AND deletion_requested_at IS NULL LIMIT 1",
+        [email],
+      );
+      if (!user.rows[0]) {
+        return reply.code(202).send({ message: "If an account exists for that email, a reset code has been sent." });
+      }
+
+      const code = createOtp();
+      await pool.query(
+        `INSERT INTO email_otps (email, purpose, user_id, code_hash, expires_at, attempts)
+         VALUES ($1, 'password_reset', $2, $3, now() + interval '10 minutes', 0)
+         ON CONFLICT (email, purpose) DO UPDATE
+         SET user_id = EXCLUDED.user_id, code_hash = EXCLUDED.code_hash,
+             expires_at = EXCLUDED.expires_at, attempts = 0, created_at = now()`,
+        [email, user.rows[0].id, hashOtp(code, sessionSecret)],
+      );
+
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtp.host,
+          port: smtp.port,
+          secure: smtp.secure,
+          auth: { user: smtp.user, pass: smtp.password },
+        });
+        await transporter.sendMail({
+          from: smtp.from,
+          to: email,
+          subject: "Your XOCRISK password reset code",
+          text: `Your XOCRISK password reset code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+        });
+      } catch (error) {
+        request.log.error({ err: error }, "Password reset email could not be sent.");
+        await pool.query("DELETE FROM email_otps WHERE email = $1 AND purpose = 'password_reset'", [email]);
+        return reply.code(503).send({ message: "Unable to send a password reset email right now. Try again later." });
+      }
+      return reply.code(202).send({ message: "If an account exists for that email, a reset code has been sent." });
+    },
+  );
+
+  app.post<{ Body: { email: string; code: string; password: string } }>(
+    "/v1/auth/password-reset/complete",
+    {
+      schema: {
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["email", "code", "password"],
+          properties: {
+            email: { type: "string", minLength: 3, maxLength: 254 },
+            code: { type: "string", pattern: "^\\d{6}$" },
+            password: { type: "string", minLength: 10, maxLength: 128 },
+          },
+        },
+      },
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      const email = normalizeEmail(request.body.email);
+      if (!email) return reply.code(400).send({ message: "The reset code is invalid or expired." });
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query<{ user_id: string; code_hash: string }>(
+          `SELECT user_id, code_hash FROM email_otps
+           WHERE email = $1 AND purpose = 'password_reset'
+             AND expires_at > now() AND attempts < 5
+           FOR UPDATE`,
+          [email],
+        );
+        const reset = result.rows[0];
+        if (!reset || !matchesHash(hashOtp(request.body.code, sessionSecret), reset.code_hash)) {
+          if (reset) {
+            await client.query(
+              "UPDATE email_otps SET attempts = attempts + 1 WHERE email = $1 AND purpose = 'password_reset'",
+              [email],
+            );
+          }
+          await client.query("COMMIT");
+          return reply.code(400).send({ message: "The reset code is invalid or expired." });
+        }
+        const passwordHash = await hashPassword(request.body.password);
+        await client.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, reset.user_id]);
+        await client.query("DELETE FROM email_otps WHERE email = $1 AND purpose = 'password_reset'", [email]);
+        await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [reset.user_id]);
+        await client.query("COMMIT");
+        return reply
+          .header("Set-Cookie", expiredSessionCookie(environment))
+          .send({ message: "Password updated. Please log in with your new password." });
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.get("/v1/auth/me", async (request, reply) => {
+    if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
+    return { user: publicUser(request.authUser) };
+  });
+
+  app.post("/v1/auth/logout", async (request, reply) => {
+    if (request.sessionHash) {
+      await pool.query("DELETE FROM auth_sessions WHERE token_hash = $1", [request.sessionHash]);
+    }
+    return reply.header("Set-Cookie", expiredSessionCookie(environment)).code(204).send();
+  });
+
+  app.delete("/v1/auth/account", async (request, reply) => {
+    if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
+    await pool.query(
+      "UPDATE users SET deletion_requested_at = now() WHERE id = $1",
+      [request.authUser.id],
+    );
+    await pool.query("DELETE FROM auth_sessions WHERE user_id = $1", [request.authUser.id]);
+    return reply
+      .header("Set-Cookie", expiredSessionCookie(environment))
+      .code(202)
+      .send({ message: "Your account deletion request has been recorded." });
+  });
+}
+
+export function sessionCookie(token: string, environment: string, rememberMe = true): string {
+  return `xocrisk_session=${token}; Path=/; HttpOnly; SameSite=Lax${rememberMe ? "; Max-Age=2592000" : ""}${environment === "production" ? "; Secure" : ""}`;
+}
+
+function cookieValue(cookieHeader: string | undefined, name: string): string | null {
+  const match = cookieHeader?.match(new RegExp(`(?:^|;\\s*)${name}=([A-Za-z0-9_-]+)(?:;|$)`));
+  return match?.[1] ?? null;
+}
+
+function oauthLinkCookie(value: string, environment: string, expired = false): string {
+  return `xocrisk_oauth_link=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${expired ? 0 : 600}${environment === "production" ? "; Secure" : ""}`;
+}
+
+function expiredSessionCookie(environment: string): string {
+  return `xocrisk_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${environment === "production" ? "; Secure" : ""}`;
+}
