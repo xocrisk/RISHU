@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
+    "start": "npm run start --workspace @xocrisk/api",
     "build:web": "npm run build --workspace web && node scripts/copy-web-export.mjs",
     "web": "npm run build:web && serve www -l 5173",
     "lint": "turbo run lint",

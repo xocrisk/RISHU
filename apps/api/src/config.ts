@@ -75,7 +75,7 @@ export function loadConfig(): ApiConfig {
 
   return {
     environment: process.env.NODE_ENV ?? "development",
-    host: process.env.HOST ?? "127.0.0.1",
+    host: process.env.HOST ?? (process.env.RENDER ? "0.0.0.0" : "127.0.0.1"),
     port,
     webOrigin: required("WEB_ORIGIN"),
     databaseUrl: required("DATABASE_URL"),
