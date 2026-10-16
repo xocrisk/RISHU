@@ -2,7 +2,13 @@
   "name": "xocrisk",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@11.17.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "^11.0.0",
+      "onFail": "warn"
+    }
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
