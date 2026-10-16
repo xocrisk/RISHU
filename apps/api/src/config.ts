@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
+
 export type ApiConfig = {
   environment: string;
   host: string;
   port: number;
   webOrigin: string;
-  databaseUrl: string;
+  databaseUrl?: string;
   sessionSecret: string;
   googleOAuth?: OAuthProviderConfig;
   microsoftOAuth?: OAuthProviderConfig & { tenantId: string };
@@ -24,12 +26,6 @@ export type SmtpConfig = {
   password: string;
   from: string;
 };
-
-function required(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
 
 function optionalProvider(prefix: string): OAuthProviderConfig | undefined {
   const clientId = process.env[`${prefix}_CLIENT_ID`]?.trim();
@@ -68,17 +64,24 @@ export function loadConfig(): ApiConfig {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be a valid TCP port");
   }
-  const sessionSecret = required("AUTH_SESSION_SECRET");
-  if (Buffer.byteLength(sessionSecret, "utf8") < 32) {
-    throw new Error("AUTH_SESSION_SECRET must contain at least 32 bytes");
+  let sessionSecret = process.env.AUTH_SESSION_SECRET?.trim();
+  if (!sessionSecret || Buffer.byteLength(sessionSecret, "utf8") < 32) {
+    console.warn(
+      "AUTH_SESSION_SECRET is missing or shorter than 32 bytes; using a random secret. Sessions will reset on every restart.",
+    );
+    sessionSecret = randomBytes(32).toString("hex");
   }
+  const webOrigin = process.env.WEB_ORIGIN?.trim() || process.env.RENDER_EXTERNAL_URL || "http://localhost:3000";
+  if (!process.env.WEB_ORIGIN?.trim()) console.warn(`WEB_ORIGIN is not set; allowing CORS from ${webOrigin}.`);
+  const databaseUrl = process.env.DATABASE_URL?.trim() || undefined;
+  if (!databaseUrl) console.warn("DATABASE_URL is not set; database-backed routes will fail until it is configured.");
 
   return {
     environment: process.env.NODE_ENV ?? "development",
     host: process.env.HOST ?? (process.env.RENDER ? "0.0.0.0" : "127.0.0.1"),
     port,
-    webOrigin: required("WEB_ORIGIN"),
-    databaseUrl: required("DATABASE_URL"),
+    webOrigin,
+    databaseUrl,
     sessionSecret,
     googleOAuth: optionalProvider("GOOGLE_OAUTH"),
     microsoftOAuth: (() => {

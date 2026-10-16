@@ -18,8 +18,16 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
+if (config.databaseUrl) {
+  try {
+    await pool.query("SELECT 1");
+  } catch (error) {
+    app.log.error("Database connection check failed; starting anyway.");
+    console.error(error);
+  }
+}
+
 try {
-  await pool.query("SELECT 1");
   await app.listen({ host: config.host, port: config.port });
 } catch (error) {
   app.log.error("API startup failed.");
