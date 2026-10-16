@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export type ApiConfig = {
   environment: string;
@@ -10,6 +12,7 @@ export type ApiConfig = {
   googleOAuth?: OAuthProviderConfig;
   microsoftOAuth?: OAuthProviderConfig & { tenantId: string };
   smtp?: SmtpConfig;
+  webRoot?: string;
 };
 
 export type OAuthProviderConfig = {
@@ -59,6 +62,11 @@ function optionalSmtp(): SmtpConfig | undefined {
   };
 }
 
+function resolveWebRoot(): string | undefined {
+  const webRoot = process.env.WEB_ROOT?.trim() || fileURLToPath(new URL("../../web/out", import.meta.url));
+  return existsSync(webRoot) ? webRoot : undefined;
+}
+
 export function loadConfig(): ApiConfig {
   const port = Number(process.env.PORT ?? "4000");
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -89,5 +97,6 @@ export function loadConfig(): ApiConfig {
       return provider ? { ...provider, tenantId: process.env.MICROSOFT_TENANT_ID?.trim() || "common" } : undefined;
     })(),
     smtp: optionalSmtp(),
+    webRoot: resolveWebRoot(),
   };
 }

@@ -6,6 +6,7 @@ import type { ApiConfig } from "./config.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerOAuthRoutes } from "./oauth.js";
 import { registerPracticeRoutes } from "./practice.js";
+import { registerStaticWeb } from "./static.js";
 
 function isValidationError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "validation" in error;
@@ -52,5 +53,6 @@ export async function buildApp(dependencies: AppDependencies) {
   });
   await registerOAuthRoutes(app, { pool: dependencies.pool, config: dependencies.config });
   await registerPracticeRoutes(app, dependencies.pool);
+  if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }
