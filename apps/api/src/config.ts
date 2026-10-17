@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type ApiConfig = {
@@ -84,7 +85,8 @@ function optionalSmtp(): SmtpConfig | undefined {
 }
 
 function resolveWebRoot(): string | undefined {
-  const webRoot = process.env.WEB_ROOT?.trim() || fileURLToPath(new URL("../../web/out", import.meta.url));
+  // Built with path.resolve (not new URL(...)) so bundlers don't mistake the folder for a file to bundle.
+  const webRoot = process.env.WEB_ROOT?.trim() || resolve(dirname(fileURLToPath(import.meta.url)), "../../web/out");
   return existsSync(webRoot) ? webRoot : undefined;
 }
 

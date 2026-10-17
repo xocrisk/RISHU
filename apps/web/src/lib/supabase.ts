@@ -3,8 +3,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Supabase Auth only does the Google step here; the XOCRISK API then signs the verified email in.
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+// The project URL and publishable key are public by design (they ship to every browser), so the live
+// project's values are the defaults; NEXT_PUBLIC_SUPABASE_* override them for another project.
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ufyfhcboglcnfdxarysr.supabase.co";
+const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_1tusT3a0XoJ_df2o2DmeIA_T7JpjPuj";
 
 let client: SupabaseClient | null = null;
 

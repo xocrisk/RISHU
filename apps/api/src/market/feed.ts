@@ -28,6 +28,7 @@ type SparkMeta = {
 };
 
 const refreshIntervalMs = 10 * 60 * 1000;
+const reloadAfterMs = 60 * 1000;
 // Yahoo publishes the closing auction price a few minutes after 15:30.
 const closingSettleMs = 10 * 60 * 1000;
 const batchSize = 20; // Yahoo's spark endpoint accepts at most 20 symbols per request.
@@ -64,6 +65,7 @@ export class MarketFeed {
   private quotes = new Map<string, Quote>();
   private indices = new Map<string, Quote>();
   private loading: Promise<void> | null = null;
+  private loadedAt = 0;
   private refreshing: Promise<void> | null = null;
   private fetchingOpens = false;
   private lastAttemptAt: Date | null = null;
@@ -76,6 +78,8 @@ export class MarketFeed {
     private readonly pool: Pool,
     private readonly log: Logger = console,
     private readonly now: () => Date = () => new Date(),
+    /** Keeps background work alive after the response (serverless platforms freeze the process otherwise). */
+    private readonly background: (work: Promise<unknown>) => void = (work) => { void work; },
   ) {}
 
   status(): MarketStatus {
@@ -103,7 +107,7 @@ export class MarketFeed {
   async list(): Promise<Quote[]> {
     await this.load();
     if (this.quotes.size === 0) await this.ensureFresh();
-    else if (this.isStale()) void this.ensureFresh().catch((error) => this.log.warn(`Market feed refresh failed: ${String(error)}`));
+    else if (this.isStale()) this.background(this.ensureFresh().catch((error) => this.log.warn(`Market feed refresh failed: ${String(error)}`)));
     return [...this.quotes.values()].sort((a, b) => (order.get(a.symbol) ?? 1e9) - (order.get(b.symbol) ?? 1e9));
   }
 
@@ -131,7 +135,10 @@ export class MarketFeed {
   }
 
   private load(): Promise<void> {
+    // Re-read the shared table now and then: another server (or serverless copy) may have refreshed it.
+    if (this.loading && !this.refreshing && Date.now() - this.loadedAt > reloadAfterMs) this.loading = null;
     this.loading ??= (async () => {
+      this.loadedAt = Date.now();
       const result = await this.pool.query<{
         symbol: string; name: string; price: string; previous_close: string; high: string; low: string;
         volume: string; market_time: Date; open: string | null; open_date: string | null; updated_at: Date;
