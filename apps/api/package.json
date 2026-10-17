@@ -35,5 +35,8 @@
       "types": "./dist/serverless.d.ts",
       "import": "./dist/serverless.js"
     }
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
