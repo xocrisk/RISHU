@@ -1,7 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 export type ApiConfig = {
   environment: string;
@@ -95,11 +92,6 @@ function optionalSmtp(): SmtpConfig | undefined {
   };
 }
 
-function resolveWebRoot(): string | undefined {
-  // Built with path.resolve (not new URL(...)) so bundlers don't mistake the folder for a file to bundle.
-  const webRoot = process.env.WEB_ROOT?.trim() || resolve(dirname(fileURLToPath(import.meta.url)), "../../web/out");
-  return existsSync(webRoot) ? webRoot : undefined;
-}
 
 export function loadConfig(): ApiConfig {
   problems.length = 0;
@@ -135,7 +127,8 @@ export function loadConfig(): ApiConfig {
     smtp: optionalSmtp(),
     razorpay: optionalRazorpay(),
     supabase: optionalSupabase(),
-    webRoot: resolveWebRoot(),
+    // Only the standalone server serves the website (see index.ts); on Vercel the platform does.
+    webRoot: process.env.WEB_ROOT?.trim() || undefined,
     problems,
   };
 }

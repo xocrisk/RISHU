@@ -1,9 +1,13 @@
 import "dotenv/config";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { databaseConfig } from "./db.js";
 import { MarketFeed } from "./market/feed.js";
+import { registerStaticWeb } from "./static.js";
 
 const config = loadConfig();
 // Keep connections open between requests: opening a new TLS connection to the database costs far more than a query.
@@ -15,6 +19,9 @@ const app = await buildApp({
   config,
   market,
 });
+// The standalone server also serves the static website (apps/web/out) when it has been built.
+const webRoot = config.webRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/out");
+if (existsSync(webRoot)) registerStaticWeb(app, webRoot);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {

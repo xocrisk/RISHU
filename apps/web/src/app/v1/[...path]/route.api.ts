@@ -2,7 +2,6 @@
 // the standalone server uses, so cookies, rate limits and validation behave identically.
 // (The ".api.ts" name keeps this file out of the static export used for the mobile app.)
 import { waitUntil } from "@vercel/functions";
-import { serverlessApp } from "@xocrisk/api/serverless";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +25,8 @@ async function handle(request: Request): Promise<Response> {
 }
 
 async function forward(request: Request): Promise<Response> {
+  // Loaded here, not at the top, so even a failure while loading the API is caught and reported below.
+  const { serverlessApp } = await import("@xocrisk/api/serverless");
   const app = await serverlessApp(waitUntil);
   const url = new URL(request.url);
   // Pages use trailing slashes; API routes don't.

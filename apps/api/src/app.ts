@@ -9,7 +9,6 @@ import { registerPracticeRoutes } from "./practice.js";
 import { MarketFeed } from "./market/feed.js";
 import { registerMarketRoutes } from "./market/routes.js";
 import { registerCommunityRoutes } from "./community.js";
-import { registerStaticWeb } from "./static.js";
 
 function isValidationError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "validation" in error;
@@ -84,6 +83,5 @@ export async function buildApp(dependencies: AppDependencies) {
   await registerPracticeRoutes(app, dependencies.pool, market);
   await registerMarketRoutes(app);
   await registerCommunityRoutes(app, dependencies.pool, market, dependencies.config.razorpay);
-  if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }
