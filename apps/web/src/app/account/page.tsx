@@ -4,24 +4,42 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthApi } from "../../lib/auth-session";
-import { istDateTime, istTimeSeconds, percent, price, tone } from "./format";
+import { istDateTime, istDayFullYear, istTimeSeconds, percent, price, tone } from "./format";
 import OrderWindow, { type OrderRequest } from "./order-window";
+import { AnalyticsView, DashboardView, InsightsView, PortfolioView, SettingsView, StockIcon, SupportView, TradeView, TrendsView } from "./pages";
 import type { Dashboard, OrderTicket, Side, Tab } from "./types";
-import { FundsView, HoldingsView, HomeView, LeaderboardView, OrdersView, PositionsView, StockView } from "./views";
+import { FundsView, OrdersView } from "./views";
 import Watchlist from "./watchlist";
 import "./dashboard.css";
 
 const pollMs = 60_000;
 const starredKey = "xocrisk.watchlist.v1";
-const tabs: { id: Tab; label: string }[] = [
-  { id: "home", label: "Dashboard" },
-  { id: "orders", label: "Orders" },
-  { id: "holdings", label: "Holdings" },
-  { id: "positions", label: "Positions" },
-  { id: "funds", label: "Funds" },
-  { id: "leaderboard", label: "Leaderboard" },
+
+type NavItem = { id: Tab; label: string; icon: string; badge?: string };
+// Icon paths are 20×20 line drawings.
+const navSections: { title: string; items: NavItem[] }[] = [
+  { title: "Overview", items: [{ id: "dashboard", label: "Dashboard", icon: "M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z" }] },
+  { title: "Account", items: [
+    { id: "portfolio", label: "Portfolio", icon: "M5 3v14M5 7h3v6H5M15 3v14M12 6h6v5h-6" },
+    { id: "wallet", label: "Wallet", icon: "M3 6h12l2 2v8H3zM3 6l2-3h9M13 11h2" },
+    { id: "watchlist", label: "Watchlist", icon: "M10 2l2.4 5 5.6.6-4.2 3.8 1.2 5.6L10 14l-5 3 1.2-5.6L2 7.6 7.6 7z" },
+  ] },
+  { title: "Activity", items: [
+    { id: "trade", label: "Trade", icon: "M3 13l4-4 3 3 7-7M13 5h4v4" },
+    { id: "transactions", label: "Transactions", icon: "M4 7h12l-3-3M16 13H4l3 3" },
+  ] },
+  { title: "Others", items: [
+    { id: "insights", label: "Insights", icon: "M3 3h14v11H3zM6 11l3-3 2 2 3-4M7 17h6" },
+    { id: "analytics", label: "Analytics", icon: "M4 17V9M10 17V3M16 17v-6", badge: "Beta" },
+    { id: "trends", label: "Market Trends", icon: "M3 15l4-5 3 3 7-8M3 17h14" },
+  ] },
+  { title: "Help", items: [
+    { id: "support", label: "Support", icon: "M10 17a7 7 0 100-14 7 7 0 000 14zM8 8a2 2 0 114 0c0 1.5-2 1.5-2 3M10 14h.01" },
+    { id: "settings", label: "Settings", icon: "M10 13a3 3 0 100-6 3 3 0 000 6zM10 1v3M10 16v3M1 10h3M16 10h3M3.6 3.6l2.1 2.1M14.3 14.3l2.1 2.1M3.6 16.4l2.1-2.1M14.3 5.7l2.1-2.1" },
+  ] },
 ];
-const hashTabs = new Set<Tab>(["home", "watchlist", "orders", "holdings", "positions", "funds", "leaderboard"]);
+const allItems = navSections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
+const tabIds = new Set<Tab>(allItems.map((item) => item.id));
 
 type Toast = { id: number; kind: "ok" | "error"; text: string };
 
@@ -34,10 +52,14 @@ function readStarred(): string[] {
   }
 }
 
-function initialTab(): Tab {
-  if (typeof window === "undefined") return "home";
+function tabFromHash(): Tab {
+  if (typeof window === "undefined") return "dashboard";
   const hash = window.location.hash.slice(1) as Tab;
-  return hashTabs.has(hash) ? hash : "home";
+  return tabIds.has(hash) ? hash : "dashboard";
+}
+
+function NavIcon({ path }: { path: string }) {
+  return <svg aria-hidden="true" viewBox="0 0 20 20"><path d={path} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>;
 }
 
 export default function AccountPage() {
@@ -48,11 +70,13 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const [tab, setTab] = useState<Tab>(tabFromHash);
   const [selected, setSelected] = useState<string | null>(null);
   const [ticket, setTicket] = useState<(OrderTicket & { key: number }) | null>(null);
   const [starred, setStarred] = useState<string[]>(() => (typeof window === "undefined" ? [] : readStarred()));
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [search, setSearch] = useState("");
   const [deletionRequested, setDeletionRequested] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
@@ -70,8 +94,7 @@ export default function AccountPage() {
       return;
     }
     if (!response.ok) throw new Error("Dashboard service unavailable.");
-    const next = await response.json() as Dashboard;
-    setData(next);
+    setData(await response.json() as Dashboard);
     setFetchedAt(new Date());
     setLoadError("");
   }, [authFetch, router]);
@@ -97,35 +120,41 @@ export default function AccountPage() {
     };
   }, [load]);
 
-  // Follow the URL hash so links, back and forward switch tabs.
+  // The URL hash follows the page, so links, back and forward work.
   useEffect(() => {
-    const onHash = () => setTab(initialTab());
+    const onHash = () => setTab(tabFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-
   useEffect(() => {
-    if (tab === "stock") return;
-    const hash = tab === "home" ? "" : `#${tab}`;
-    if (window.location.hash !== hash) window.history.replaceState(null, "", `${window.location.pathname}${hash}`);
+    const hash = tab === "dashboard" ? "" : `#${tab}`;
+    if (window.location.hash !== hash) window.history.pushState(null, "", `${window.location.pathname}${hash}`);
   }, [tab]);
 
   const quotes = useMemo(() => new Map((data?.market.quotes ?? []).map((quote) => [quote.symbol, quote])), [data]);
   const indices = useMemo(() => new Map((data?.market.indices ?? []).map((quote) => [quote.symbol, quote])), [data]);
   const nifty50 = useMemo(() => new Set(data?.market.nifty50 ?? []), [data]);
   const holdings = useMemo(() => new Map((data?.holdings ?? []).map((holding) => [holding.symbol, holding])), [data]);
-  const activeSymbol = selected ?? data?.market.quotes[0]?.symbol ?? null;
-
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || !data) return [];
+    return [...data.market.indices, ...data.market.quotes]
+      .filter((quote) => quote.symbol.toLowerCase().includes(q) || quote.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(!a.symbol.toLowerCase().startsWith(q)) - Number(!b.symbol.toLowerCase().startsWith(q)))
+      .slice(0, 8);
+  }, [search, data]);
   const closeTicket = useCallback(() => setTicket(null), []);
 
   function navigate(next: Tab) {
     setTab(next);
-    setMenuOpen(false);
+    setDrawer(false);
+    window.scrollTo({ top: 0 });
   }
 
   function openStock(symbol: string) {
     setSelected(symbol);
-    setTab("stock");
+    setSearch("");
+    navigate("trade");
   }
 
   function trade(next: OrderTicket) {
@@ -133,12 +162,9 @@ export default function AccountPage() {
     setTicket({ ...next, key: Date.now() });
   }
 
-  function toggleStar(symbol: string) {
-    setStarred((current) => {
-      const next = current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol];
-      try { localStorage.setItem(starredKey, JSON.stringify(next)); } catch { /* storage blocked: keep it for this visit */ }
-      return next;
-    });
+  function saveStarred(next: string[]) {
+    setStarred(next);
+    try { localStorage.setItem(starredKey, JSON.stringify(next)); } catch { /* storage blocked: keep it for this visit */ }
   }
 
   async function call(path: string, init: RequestInit, fallback: string): Promise<{ ok: boolean; message?: string }> {
@@ -192,14 +218,13 @@ export default function AccountPage() {
       await authFetch("/v1/auth/logout", { method: "POST" });
       router.replace("/login");
     } catch {
-      toast("error", "Couldn't sign out. Try again.");
+      toast("error", "Couldn't log out. Try again.");
       setPending(false);
     }
   }
 
   async function requestDeletion() {
-    setMenuOpen(false);
-    if (!window.confirm("Request account deletion? Sign-in is disabled immediately and this can't be undone.")) return;
+    if (!window.confirm("Delete your account? Sign-in is disabled immediately and this can't be undone.")) return;
     setPending(true);
     try {
       const response = await authFetch("/v1/auth/account", { method: "DELETE" });
@@ -214,109 +239,161 @@ export default function AccountPage() {
 
   if (deletionRequested) {
     return (
-      <main className="xt-splash">
+      <main className="xq-splash">
         <h1>Deletion request received</h1>
         <p>Your sign-in has been disabled. Your data will be erased separately.</p>
-        <Link className="xt-btn ghost" href="/login">Back to log in</Link>
+        <Link className="xq-btn ghost" href="/login">Back to log in</Link>
       </main>
     );
   }
-  if (loading) return <main aria-busy="true" className="xt-splash"><span className="xt-spinner" /><p>Opening your trading terminal…</p></main>;
+  if (loading) return <main aria-busy="true" className="xq-splash"><span className="xq-spinner" /><p>Opening XOCRISK…</p></main>;
   if (!data) {
     return (
-      <main className="xt-splash">
+      <main className="xq-splash">
         <p>{loadError || "Your workspace could not be loaded."}</p>
-        <button className="xt-btn buy" onClick={() => { setLoading(true); load().catch(() => setLoadError("Still can't reach the trading service.")).finally(() => setLoading(false)); }} type="button">Try again</button>
-        <Link className="xt-link" href="/login">Back to log in</Link>
+        <button className="xq-btn primary" onClick={() => { setLoading(true); load().catch(() => setLoadError("Still can't reach the trading service.")).finally(() => setLoading(false)); }} type="button">Try again</button>
+        <Link className="xq-link" href="/login">Back to log in</Link>
       </main>
     );
   }
 
   const status = data.market.status;
+  const current = allItems.find((item) => item.id === tab) ?? allItems[0];
+  const activeSymbol = selected ?? data.market.nifty50[0] ?? data.market.quotes[0]?.symbol;
   const stockQuote = activeSymbol ? quotes.get(activeSymbol) ?? indices.get(activeSymbol) : undefined;
-  const initials = (data.user.fullName ?? "Trader").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const firstName = data.user.fullName?.split(" ")[0] ?? "Trader";
+  const openOrders = data.orders.filter((order) => order.status === "open").length;
+  const badges: Partial<Record<Tab, string>> = {
+    portfolio: data.holdings.length ? String(data.holdings.length) : undefined,
+    transactions: openOrders ? String(openOrders) : undefined,
+    watchlist: starred.length ? String(starred.length) : undefined,
+  };
+  const ticker = data.market.quotes.filter((quote) => nifty50.has(quote.symbol));
   const ticketQuote = ticket ? quotes.get(ticket.symbol) : undefined;
   const openTrade = (symbol: string, side: Side) => trade({ symbol, side, quantity: side === "sell" ? holdings.get(symbol)?.quantity : undefined });
+  const toggleStar = (symbol: string) => saveStarred(starred.includes(symbol) ? starred.filter((item) => item !== symbol) : [...starred, symbol]);
 
   return (
-    <div className={`xt tab-${tab}`}>
-      <header className="xt-top">
-        <Link aria-label="XOCRISK home" className="xt-brand" href="/account">
-          {/* eslint-disable-next-line @next/next/no-img-element -- static export, no image optimizer */}
-          <img alt="" height="30" src="/icon-192.png" width="30" />
-          <span>XOCRISK</span>
-        </Link>
-        <div className="xt-indices-strip">
-          {data.market.indices.filter((index) => index.symbol !== "NIFTY BANK").map((index) => (
-            <button key={index.symbol} onClick={() => openStock(index.symbol)} type="button">
-              <span>{index.symbol}</span><b className={tone(index.change)}>{price(index.price)}</b><small className={tone(index.change)}>{percent(index.changePercent)}</small>
-            </button>
-          ))}
+    <div className={`xq ${collapsed ? "is-collapsed" : ""} ${drawer ? "drawer-open" : ""}`}>
+      <aside className="xq-sidebar">
+        <div className="xq-brand-row">
+          <Link aria-label="XOCRISK dashboard" className="xq-brand" href="/account">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static export, no image optimizer */}
+            <img alt="" height="36" src="/icon-192.png" width="36" />
+            <span><strong>XOCRISK</strong><small>AI-Powered Trading</small></span>
+          </Link>
+          <button aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className="xq-collapse" onClick={() => { setCollapsed((value) => !value); setDrawer(false); }} type="button">
+            <svg aria-hidden="true" viewBox="0 0 20 20"><path d={collapsed ? "M8 5l5 5-5 5" : "M12 5l-5 5 5 5"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          </button>
         </div>
-        <nav aria-label="Sections" className="xt-nav">
-          {tabs.map((item) => (
-            <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => navigate(item.id)} type="button">{item.label}</button>
+        <div className="xq-welcome">
+          <h2>Welcome<br />Back, {firstName}</h2>
+          <p>Last login: {data.user.lastLoginAt ? istDayFullYear.format(new Date(data.user.lastLoginAt)) : "today"}</p>
+        </div>
+        <nav aria-label="Main">
+          {navSections.map((section) => (
+            <div className="xq-nav-section" key={section.title}>
+              <p>{section.title}</p>
+              {section.items.map((item) => (
+                <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => navigate(item.id)} title={item.label} type="button">
+                  <NavIcon path={item.icon} />
+                  <span>{item.label}</span>
+                  {item.badge && <em className="xq-badge">{item.badge}</em>}
+                  {!item.badge && badges[item.id] && <em className="xq-count">{badges[item.id]}</em>}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
-        <div className={`xt-status-pill ${status.isOpen ? "open" : ""}`}
-          title={`${status.isOpen ? "Closes" : "Opens"} ${istDateTime.format(new Date(status.nextChangeAt))} IST · prices delayed ~10 min`}>
-          <i />{status.isOpen ? "Market open" : "Market closed"}
-          {fetchedAt && <small>{istTimeSeconds.format(fetchedAt)}</small>}
+      </aside>
+      {drawer && <button aria-label="Close menu" className="xq-scrim" onClick={() => setDrawer(false)} type="button" />}
+
+      <div className="xq-content">
+        <header className="xq-topbar">
+          <button aria-label="Open menu" className="xq-burger" onClick={() => setDrawer(true)} type="button">
+            <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+          </button>
+          <nav aria-label="Breadcrumb" className="xq-crumbs">
+            <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 9l7-6 7 6v8H3z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+            <span>{current.section}</span><i>/</i><b>{tab === "trade" && stockQuote ? `Trade · ${stockQuote.symbol}` : current.label}</b>
+          </nav>
+          <div className="xq-search">
+            <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" /></svg>
+            <input aria-label="Search stocks" onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter" && searchResults[0]) openStock(searchResults[0].symbol); if (event.key === "Escape") setSearch(""); }}
+              placeholder="Search..." value={search} />
+            {searchResults.length > 0 && (
+              <ul className="xq-search-results">
+                {searchResults.map((quote) => (
+                  <li key={quote.symbol}>
+                    <button onClick={() => openStock(quote.symbol)} onMouseDown={(event) => event.preventDefault()} type="button">
+                      <StockIcon size={28} symbol={quote.symbol} />
+                      <span><b>{quote.symbol}</b><small>{quote.name}</small></span>
+                      <span className="xq-num">₹{price(quote.price)}<small className={tone(quote.change)}>{percent(quote.changePercent)}</small></span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className={`xq-status ${status.isOpen ? "open" : ""}`}
+            title={`${status.isOpen ? "Closes" : "Opens"} ${istDateTime.format(new Date(status.nextChangeAt))} IST · prices delayed ~10 min${fetchedAt ? ` · refreshed ${istTimeSeconds.format(fetchedAt)}` : ""}`}>
+            <i />{status.isOpen ? "Market open" : "Market closed"}
+          </div>
+        </header>
+
+        <div aria-label="NIFTY 50 prices" className="xq-ticker">
+          <div className="xq-ticker-track">
+            {[...ticker, ...ticker].map((quote, index) => (
+              <button aria-hidden={index >= ticker.length} key={`${quote.symbol}-${index}`} onClick={() => openStock(quote.symbol)} tabIndex={index >= ticker.length ? -1 : 0} type="button">
+                <StockIcon size={18} symbol={quote.symbol} /><b>{quote.symbol}</b>
+                <span>₹{price(quote.price)}</span><small className={tone(quote.change)}>{percent(quote.changePercent)}</small>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="xt-profile">
-          <button aria-expanded={menuOpen} aria-haspopup="menu" className="xt-avatar" onClick={() => setMenuOpen((open) => !open)} type="button">{initials}</button>
-          {menuOpen && (
-            <div className="xt-menu" role="menu">
-              <div className="xt-menu-head"><strong>{data.user.fullName ?? "Trader"}</strong>{data.user.college && <small>{data.user.college}</small>}</div>
-              <button onClick={() => navigate("funds")} role="menuitem" type="button">Funds</button>
-              <button onClick={() => navigate("leaderboard")} role="menuitem" type="button">Leaderboard</button>
-              <button disabled={pending} onClick={() => void logout()} role="menuitem" type="button">Log out</button>
-              <button className="danger" disabled={pending} onClick={() => void requestDeletion()} role="menuitem" type="button">Delete account</button>
+
+        {loadError && <div className="xq-banner error" role="status">{loadError}</div>}
+        {!status.isOpen && (
+          <div className="xq-banner">
+            Market closed{status.reason ? ` · ${status.reason}` : ""} · opens {istDateTime.format(new Date(status.nextChangeAt))} IST. Limit orders placed now are queued for the next session.
+          </div>
+        )}
+
+        <main className="xq-main">
+          {tab === "dashboard" && <DashboardView data={data} holdings={holdings} nifty50={nifty50} onOpen={openStock} onTrade={trade} />}
+          {tab === "portfolio" && <PortfolioView data={data} onOpen={openStock} onTrade={trade} quotes={quotes} />}
+          {tab === "wallet" && <div className="xq-page"><FundsView data={data} onReset={() => void resetPortfolio()} pending={pending} /></div>}
+          {tab === "watchlist" && (
+            <div className="xq-page narrow">
+              <div className="xq-page-head"><h1>Watchlist</h1><span className="xq-muted">Tap ☆ to add a stock to My list</span></div>
+              <div className="xq-panel flush xq-watch-page">
+                <Watchlist nifty50={nifty50} onSelect={openStock} onToggleStar={toggleStar} onTrade={openTrade}
+                  quotes={data.market.quotes} selected={null} starred={starred} />
+              </div>
             </div>
           )}
-        </div>
-      </header>
-
-      {loadError && <div className="xt-banner" role="status">{loadError}</div>}
-      {!status.isOpen && (
-        <div className="xt-banner subtle">
-          Market closed{status.reason ? ` · ${status.reason}` : ""} · opens {istDateTime.format(new Date(status.nextChangeAt))} IST. Limit orders you place now are queued for the next session.
-        </div>
-      )}
-
-      <div className="xt-body">
-        <aside className="xt-side">
-          <Watchlist nifty50={nifty50} onSelect={openStock} onToggleStar={toggleStar} onTrade={openTrade}
-            quotes={data.market.quotes} selected={tab === "stock" ? activeSymbol : null} starred={starred} />
-        </aside>
-        <main className="xt-main" onClick={() => setMenuOpen(false)}>
-          {tab === "home" && <HomeView data={data} nifty50={nifty50} onNavigate={navigate} onOpen={openStock} onTrade={trade} />}
-          {tab === "stock" && stockQuote && (
-            <StockView holding={holdings.get(stockQuote.symbol)} isIndex={indices.has(stockQuote.symbol)} onTrade={trade} quote={stockQuote} />
+          {tab === "trade" && (
+            <TradeView data={data} holding={stockQuote ? holdings.get(stockQuote.symbol) : undefined} isIndex={!!stockQuote && indices.has(stockQuote.symbol)}
+              nifty50={nifty50} onOpen={(symbol) => setSelected(symbol)} onToggleStar={toggleStar} onTrade={trade} quote={stockQuote} starred={starred} />
           )}
-          {tab === "orders" && <OrdersView onCancel={(id) => void cancelOrder(id)} onOpen={openStock} onTrade={trade} orders={data.orders} pending={pending} quotes={quotes} />}
-          {tab === "holdings" && <HoldingsView holdings={data.holdings} onOpen={openStock} onTrade={trade} quotes={quotes} />}
-          {tab === "positions" && <PositionsView onOpen={openStock} onTrade={trade} orders={data.orders} quotes={quotes} />}
-          {tab === "funds" && <FundsView data={data} onReset={() => void resetPortfolio()} pending={pending} />}
-          {tab === "leaderboard" && <LeaderboardView data={data} onToggle={(enabled) => void setLeaderboard(enabled)} pending={pending} />}
-          <p className="xt-footnote">
-            Practice trading with virtual money · NSE prices delayed ~10 minutes, from Yahoo Finance · not investment advice
-          </p>
+          {tab === "transactions" && (
+            <div className="xq-page"><OrdersView onCancel={(id) => void cancelOrder(id)} onOpen={openStock} onTrade={trade} orders={data.orders} pending={pending} quotes={quotes} /></div>
+          )}
+          {tab === "insights" && <InsightsView data={data} onOpen={openStock} onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} quotes={quotes} />}
+          {tab === "analytics" && <AnalyticsView data={data} quotes={quotes} />}
+          {tab === "trends" && <TrendsView data={data} onOpen={openStock} onTrade={trade} />}
+          {tab === "support" && <SupportView />}
+          {tab === "settings" && (
+            <SettingsView data={data} onClearStarred={() => saveStarred([])} onDelete={() => void requestDeletion()} onLogout={() => void logout()}
+              onReset={() => void resetPortfolio()} onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} starredCount={starred.length} />
+          )}
+          <p className="xq-footnote">XOCRISK · practice trading with virtual money · NSE prices delayed ~10 minutes · not investment advice</p>
         </main>
       </div>
 
-      <nav aria-label="Sections" className="xt-bottom">
-        {([["watchlist", "Watchlist", "M3 5h14M3 10h14M3 15h9"], ["home", "Home", "M3 10l7-6 7 6v7H3z"], ["orders", "Orders", "M5 3h10v14H5zM8 7h4M8 11h4"],
-          ["holdings", "Holdings", "M3 16V9M8 16V4M13 16v-6M17 16H2"], ["positions", "Positions", "M3 14l4-4 3 3 6-7"], ["funds", "Funds", "M3 6h14v9H3zM13 10.5h2"]] as const).map(([id, label, path]) => (
-          <button aria-current={tab === id || (id === "watchlist" && tab === "stock") ? "page" : undefined} key={id} onClick={() => navigate(id)} type="button">
-            <svg aria-hidden="true" viewBox="0 0 20 20"><path d={path} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" /></svg>
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <div aria-live="polite" className="xt-toasts">
-        {toasts.map((item) => <div className={`xt-toast ${item.kind}`} key={item.id}>{item.text}</div>)}
+      <div aria-live="polite" className="xq-toasts">
+        {toasts.map((item) => <div className={`xq-toast ${item.kind}`} key={item.id}>{item.text}</div>)}
       </div>
 
       {ticket && ticketQuote && (

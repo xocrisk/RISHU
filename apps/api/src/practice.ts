@@ -243,9 +243,14 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
       );
       const portfolioData = await client.query<{
         cash: string; realized_pnl: string; day_start_value: string; leaderboard_opt_in: boolean;
-        full_name: string | null; college: string | null;
+        full_name: string | null; college: string | null; email: string; mobile: string | null;
+        member_since: Date; previous_login: Date | null; current_login: Date | null;
       }>(
-        `SELECT p.cash, p.realized_pnl, p.day_start_value, u.leaderboard_opt_in, u.full_name, u.college
+        `SELECT p.cash, p.realized_pnl, p.day_start_value, u.leaderboard_opt_in, u.full_name, u.college,
+           u.email, u.mobile, u.created_at AS member_since,
+           -- The newest session is this visit; the one before it is the last login.
+           (SELECT created_at FROM auth_sessions s WHERE s.user_id = u.id ORDER BY created_at DESC OFFSET 1 LIMIT 1) AS previous_login,
+           (SELECT max(created_at) FROM auth_sessions s WHERE s.user_id = u.id) AS current_login
          FROM practice_portfolios p JOIN users u ON u.id = p.user_id WHERE p.user_id = $1`,
         [id],
       );
@@ -317,7 +322,11 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
         }));
       await client.query("COMMIT");
       return {
-        user: { fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in },
+        user: {
+          fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in,
+          email: data.email, mobile: data.mobile, memberSince: data.member_since,
+          lastLoginAt: data.previous_login ?? data.current_login,
+        },
         market: {
           dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,
           status: { isOpen: status.isOpen, reason: status.reason, nextChangeAt: status.nextChangeAt },

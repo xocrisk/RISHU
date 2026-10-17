@@ -1,5 +1,5 @@
 export type Quote = {
-  symbol: string; name: string; price: number; change: number; changePercent: number;
+  symbol: string; name: string; industry: string; price: number; change: number; changePercent: number;
   /** Day open; null until fetched for the latest session. */
   open: number | null; high: number; low: number;
   /** Previous session close. */
@@ -25,7 +25,10 @@ export type Order = {
 export type MarketStatus = { isOpen: boolean; reason: string | null; nextChangeAt: string };
 
 export type Dashboard = {
-  user: { fullName: string | null; college: string | null; leaderboardOptIn: boolean };
+  user: {
+    fullName: string | null; college: string | null; leaderboardOptIn: boolean;
+    email: string; mobile: string | null; memberSince: string; lastLoginAt: string | null;
+  };
   market: { dataMode: "DELAYED"; lastUpdatedAt: string | null; status: MarketStatus; quotes: Quote[]; indices: Quote[]; nifty50: string[] };
   portfolio: {
     totalValue: number; dayChange: number; dayChangePercent: number; availableCash: number;
@@ -38,7 +41,8 @@ export type Dashboard = {
   rules: { initialCash: number; charges: number; slippage: number; limitBandPercent: number };
 };
 
-export type Tab = "home" | "watchlist" | "stock" | "orders" | "holdings" | "positions" | "funds" | "leaderboard";
+export type Tab = "dashboard" | "portfolio" | "wallet" | "watchlist" | "trade" | "transactions"
+  | "insights" | "analytics" | "trends" | "support" | "settings";
 
 export type OrderTicket = { symbol: string; side: Side; quantity?: number; product?: Product; orderType?: OrderType; price?: number };
 

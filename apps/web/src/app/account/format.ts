@@ -31,6 +31,14 @@ export const istTime = ist({ hour: "2-digit", minute: "2-digit", hour12: false }
 export const istTimeSeconds = ist({ hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 export const istDay = ist({ day: "numeric", month: "short" });
 export const istDayYear = ist({ day: "numeric", month: "short", year: "2-digit" });
+export const istDayFullYear = ist({ day: "numeric", month: "short", year: "numeric" });
+
+/** Large rupee amounts the Indian way: ₹4,850 Cr, ₹12.5 L. */
+export const rupeesShort = (value: number) => {
+  if (value >= 1e7) return `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: value >= 1e9 ? 0 : 1 }).format(value / 1e7)} Cr`;
+  if (value >= 1e5) return `₹${(value / 1e5).toFixed(1)} L`;
+  return `₹${whole.format(Math.round(value))}`;
+};
 export const istOrderTime = ist({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** IST calendar date, YYYY-MM-DD. */

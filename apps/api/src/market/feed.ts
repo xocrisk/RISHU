@@ -5,6 +5,8 @@ import { instruments } from "./instruments.js";
 export type Quote = {
   symbol: string;
   name: string;
+  /** NSE industry, or "Index" for market indices. */
+  industry: string;
   price: number;
   change: number;
   changePercent: number;
@@ -44,6 +46,7 @@ const names = new Map([
   ...indexDefinitions.map((index) => [index.symbol, index.name] as const),
 ]);
 const order = new Map(instruments.map((instrument, index) => [instrument.symbol, index]));
+const industries = new Map(instruments.map((instrument) => [instrument.symbol, instrument.industry]));
 const yahooBySymbol = new Map(indexDefinitions.map((index) => [index.symbol, index.yahoo]));
 const symbolByYahoo = new Map(indexDefinitions.map((index) => [index.yahoo, index.symbol]));
 
@@ -168,7 +171,7 @@ export class MarketFeed {
     volume: number, marketTime: Date, open: number | null): Quote {
     const change = round(price - previousClose);
     return {
-      symbol, name: names.get(symbol) ?? symbol, price, change,
+      symbol, name: names.get(symbol) ?? symbol, industry: industries.get(symbol) ?? "Index", price, change,
       changePercent: previousClose ? round((change / previousClose) * 100) : 0,
       open, high, low, close: previousClose, volume, marketTime: marketTime.toISOString(),
     };

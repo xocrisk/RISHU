@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import StockChart from "./stock-chart";
-import { count, istDate, istDateTime, istOrderTime, money, num, percent, price, shortNumber, signed, tone } from "./format";
-import type { Chart, Dashboard, Holding, Order, OrderTicket, Product, Quote, Tab } from "./types";
+import { count, istDate, istOrderTime, money, num, percent, price, shortNumber, signed, tone } from "./format";
+import type { Chart, Dashboard, Holding, Order, OrderTicket, Product, Quote } from "./types";
 
-type Trade = (ticket: OrderTicket) => void;
+export type Trade = (ticket: OrderTicket) => void;
 
-function Change({ value, pct, plain = false }: { value: number; pct?: number; plain?: boolean }) {
+export function Change({ value, pct, plain = false }: { value: number; pct?: number; plain?: boolean }) {
   return (
     <span className={tone(value)}>
       {signed(value, plain ? price : money)}{pct !== undefined && <> ({percent(pct)})</>}
@@ -15,125 +15,13 @@ function Change({ value, pct, plain = false }: { value: number; pct?: number; pl
   );
 }
 
-function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
+export function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <div className="xt-empty">
       <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M6 36l10-12 8 7 16-19" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
       <h3>{title}</h3>
       {children}
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ Home */
-
-export function HomeView({ data, nifty50, onOpen, onNavigate, onTrade }: {
-  data: Dashboard; nifty50: Set<string>; onOpen: (symbol: string) => void; onNavigate: (tab: Tab) => void; onTrade: Trade;
-}) {
-  const { portfolio, holdings, market } = data;
-  const name = data.user.fullName?.split(" ")[0];
-  const invested = holdings.reduce((total, holding) => total + holding.averageCost * holding.quantity, 0);
-  const totalPnl = portfolio.unrealizedPnl;
-  const pnlPct = invested ? (totalPnl / invested) * 100 : 0;
-  const usedMargin = portfolio.cash - portfolio.availableCash;
-  const movers = data.market.quotes.filter((quote) => nifty50.has(quote.symbol));
-  const gainers = [...movers].sort((a, b) => b.changePercent - a.changePercent).slice(0, 5);
-  const losers = [...movers].sort((a, b) => a.changePercent - b.changePercent).slice(0, 5);
-  const trend = portfolio.trend.map((point) => point.value);
-
-  return (
-    <div className="xt-view xt-home">
-      <h1 className="xt-greeting">Hi, {name ?? "trader"}</h1>
-
-      <div className="xt-cards two">
-        <section className="xt-card">
-          <header><span className="xt-card-icon">◔</span>Equity</header>
-          <div className="xt-card-split">
-            <div className="xt-big"><strong>{money(portfolio.availableCash)}</strong><span>Margin available</span></div>
-            <dl>
-              <div><dt>Margin used</dt><dd>{money(usedMargin)}</dd></div>
-              <div><dt>Opening balance</dt><dd>{money(data.rules.initialCash)}</dd></div>
-              <div><dt>Account value</dt><dd>{money(portfolio.totalValue)}</dd></div>
-            </dl>
-          </div>
-          <button className="xt-link" onClick={() => onNavigate("funds")} type="button">View statement →</button>
-        </section>
-
-        <section className="xt-card">
-          <header><span className="xt-card-icon">◆</span>Holdings ({holdings.length})</header>
-          {holdings.length ? (
-            <>
-              <div className="xt-card-split">
-                <div className="xt-big"><strong className={tone(totalPnl)}>{signed(totalPnl)}</strong><span>P&amp;L <em className={tone(pnlPct)}>{percent(pnlPct)}</em></span></div>
-                <dl>
-                  <div><dt>Current value</dt><dd>{money(portfolio.investedValue)}</dd></div>
-                  <div><dt>Investment</dt><dd>{money(invested)}</dd></div>
-                  <div><dt>Today</dt><dd><Change pct={portfolio.dayChangePercent} value={portfolio.dayChange} /></dd></div>
-                </dl>
-              </div>
-              <div aria-hidden="true" className="xt-allocation">
-                {holdings.map((holding, index) => (
-                  <span key={holding.symbol} style={{ flexGrow: Math.max(holding.currentValue, 1), opacity: 1 - (index % 6) * 0.12 }} title={`${holding.symbol} ${money(holding.currentValue)}`} />
-                ))}
-              </div>
-              <button className="xt-link" onClick={() => onNavigate("holdings")} type="button">View holdings →</button>
-            </>
-          ) : (
-            <Empty title="You don't have any holdings yet">
-              <p>Buy a stock from the watchlist. Your ₹1,00,000 practice balance is ready.</p>
-              <button className="xt-btn buy small" onClick={() => onOpen(market.quotes[0]?.symbol ?? "RELIANCE")} type="button">Explore stocks</button>
-            </Empty>
-          )}
-        </section>
-      </div>
-
-      <section className="xt-card">
-        <header><span className="xt-card-icon">≋</span>Market overview <small className="xt-muted">Updated {market.lastUpdatedAt ? istDateTime.format(new Date(market.lastUpdatedAt)) : "—"}</small></header>
-        <div className="xt-indices">
-          {market.indices.map((index) => (
-            <button className="xt-index-card" key={index.symbol} onClick={() => onOpen(index.symbol)} type="button">
-              <span>{index.symbol}</span>
-              <strong>{price(index.price)}</strong>
-              <Change pct={index.changePercent} plain value={index.change} />
-            </button>
-          ))}
-        </div>
-        <div className="xt-movers">
-          {([["Top gainers · Nifty 50", gainers], ["Top losers · Nifty 50", losers]] as const).map(([title, list]) => (
-            <div key={title}>
-              <h3>{title}</h3>
-              <ul>
-                {list.map((quote) => (
-                  <li key={quote.symbol}>
-                    <button onClick={() => onOpen(quote.symbol)} type="button">
-                      <span><b>{quote.symbol}</b><small>{quote.name}</small></span>
-                      <span className="xt-num">{price(quote.price)}<small className={tone(quote.change)}>{percent(quote.changePercent)}</small></span>
-                    </button>
-                    <button className="xt-mini buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} title={`Buy ${quote.symbol}`} type="button">B</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="xt-card">
-        <header><span className="xt-card-icon">↗</span>Today&apos;s account value</header>
-        {trend.length > 1 ? <Sparkline values={trend} /> : <p className="xt-muted">Your account value is tracked through the day after every trade.</p>}
-      </section>
-    </div>
-  );
-}
-
-function Sparkline({ values }: { values: number[] }) {
-  const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
-  const points = values.map((value, index) => `${(index / (values.length - 1)) * 100},${36 - ((value - min) / span) * 30}`).join(" ");
-  const up = values[values.length - 1] >= values[0];
-  return (
-    <svg aria-label="Account value through today" className="xt-sparkline" preserveAspectRatio="none" role="img" viewBox="0 0 100 40">
-      <polyline fill="none" points={points} stroke={up ? "var(--up)" : "var(--down)"} strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }
 
