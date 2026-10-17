@@ -1,33 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import type { MarketFeed, Quote } from "./market/feed.js";
 
-type Quote = {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-};
-
-const quotes: Quote[] = [
-  { symbol: "RELIANCE", name: "Reliance Industries", price: 1450, change: 8.4, changePercent: 0.58, open: 1444, high: 1458, low: 1439, close: 1441.6 },
-  { symbol: "TCS", name: "Tata Consultancy Services", price: 4102.55, change: 18.2, changePercent: 0.45, open: 4088, high: 4112, low: 4075, close: 4084.35 },
-  { symbol: "INFY", name: "Infosys", price: 1512.4, change: -4.6, changePercent: -0.30, open: 1519, high: 1523, low: 1506, close: 1517 },
-  { symbol: "HDFCBANK", name: "HDFC Bank", price: 1680, change: 6.25, changePercent: 0.37, open: 1674, high: 1688, low: 1669, close: 1673.75 },
-  { symbol: "ICICIBANK", name: "ICICI Bank", price: 1245, change: 3.5, changePercent: 0.28, open: 1242, high: 1251, low: 1236, close: 1241.5 },
-  { symbol: "ITC", name: "ITC Limited", price: 432.8, change: -1.2, changePercent: -0.28, open: 434, high: 436, low: 430, close: 434 },
-  { symbol: "SBIN", name: "State Bank of India", price: 812.5, change: 5.15, changePercent: 0.64, open: 807, high: 816, low: 804, close: 807.35 },
-  { symbol: "TATAMOTORS", name: "Tata Motors", price: 688, change: 2.4, changePercent: 0.35, open: 685, high: 694, low: 681, close: 685.6 },
-  { symbol: "WIPRO", name: "Wipro", price: 286.4, change: -0.85, changePercent: -0.30, open: 287, high: 289, low: 284, close: 287.25 },
-  { symbol: "LT", name: "Larsen & Toubro", price: 3560, change: 21, changePercent: 0.59, open: 3542, high: 3572, low: 3530, close: 3539 },
-  { symbol: "BHARTIARTL", name: "Bharti Airtel", price: 1875, change: 9.5, changePercent: 0.51, open: 1867, high: 1884, low: 1859, close: 1865.5 },
-  { symbol: "MARUTI", name: "Maruti Suzuki", price: 12400, change: -42, changePercent: -0.34, open: 12450, high: 12480, low: 12370, close: 12442 },
-];
-const bySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
 const initialCash = 100000;
 const orderSchema = {
   body: {
@@ -49,8 +23,19 @@ function userId(request: FastifyRequest): string | null {
   return request.authUser?.id ?? null;
 }
 
-function priceOf(symbol: string): number {
-  return bySymbol.get(symbol)?.price ?? 0;
+type Prices = Map<string, Quote>;
+
+function pricesOf(quotes: Quote[]): Prices {
+  return new Map(quotes.map((quote) => [quote.symbol, quote]));
+}
+
+const istTime = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+});
+
+function closedMessage(market: MarketFeed): string {
+  const status = market.status();
+  return `The market is closed (${status.reason}). It opens at ${istTime.format(status.nextChangeAt)} IST.`;
 }
 
 function money(value: number | string): number {
@@ -91,7 +76,7 @@ async function recordRejectedOrder(
   );
 }
 
-async function portfolioValue(client: PoolClient, id: string): Promise<number> {
+async function portfolioValue(client: PoolClient, id: string, prices: Prices): Promise<number> {
   const result = await client.query<{ cash: string }>(
     "SELECT cash FROM practice_portfolios WHERE user_id = $1",
     [id],
@@ -103,14 +88,14 @@ async function portfolioValue(client: PoolClient, id: string): Promise<number> {
     [id],
   );
   const marketValue = holdings.rows.reduce(
-    (total, holding) => total + holding.quantity * (priceOf(holding.symbol) || Number(holding.average_cost)),
+    (total, holding) => total + holding.quantity * (prices.get(holding.symbol)?.price ?? Number(holding.average_cost)),
     0,
   );
   return money(Number(row.cash) + marketValue);
 }
 
-async function recordSnapshot(client: PoolClient, id: string, reason: string): Promise<void> {
-  const value = await portfolioValue(client, id);
+async function recordSnapshot(client: PoolClient, id: string, reason: string, prices: Prices): Promise<void> {
+  const value = await portfolioValue(client, id, prices);
   await client.query(
     "INSERT INTO practice_portfolio_snapshots (user_id, portfolio_value, reason) VALUES ($1, $2, $3)",
     [id, value, reason],
@@ -122,6 +107,7 @@ async function applyFill(
   id: string,
   order: { id: string; symbol: string; side: "buy" | "sell"; quantity: number; product: string },
   fillPrice: number,
+  prices: Prices,
 ): Promise<void> {
   const amount = money(fillPrice * order.quantity);
   await client.query("SELECT user_id FROM practice_portfolios WHERE user_id = $1 FOR UPDATE", [id]);
@@ -175,14 +161,66 @@ async function applyFill(
     "UPDATE practice_orders SET status = 'filled', fill_price = $2, filled_at = now() WHERE id = $1",
     [order.id, fillPrice],
   );
-  await recordSnapshot(client, id, `order:${order.id}`);
+  await recordSnapshot(client, id, `order:${order.id}`, prices);
 }
 
-export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
+/**
+ * Fills open limit orders whose price condition is met at the current quotes, for one user or everyone.
+ * Runs only while the market is open. An order that can no longer be funded is rejected instead.
+ */
+export async function fillLimitOrders(pool: Pool, market: MarketFeed, onlyUser?: string): Promise<void> {
+  if (!market.status().isOpen) return;
+  const prices = pricesOf(await market.list());
+  const open = await pool.query<{ id: string; user_id: string; symbol: string; side: "buy" | "sell"; limit_price: string }>(
+    `SELECT id, user_id, symbol, side, limit_price FROM practice_orders
+     WHERE status = 'open' AND order_type = 'limit' AND ($1::uuid IS NULL OR user_id = $1)
+     ORDER BY created_at`,
+    [onlyUser ?? null],
+  );
+  for (const row of open.rows) {
+    const quote = prices.get(row.symbol);
+    const limit = Number(row.limit_price);
+    if (!quote || !(row.side === "buy" ? quote.price <= limit : quote.price >= limit)) continue;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const locked = await client.query<{ quantity: number; product: string }>(
+        "SELECT quantity, product FROM practice_orders WHERE id = $1 AND status = 'open' FOR UPDATE", [row.id],
+      );
+      const order = locked.rows[0];
+      if (!order) {
+        await client.query("ROLLBACK");
+        continue;
+      }
+      try {
+        await applyFill(client, row.user_id, {
+          id: row.id, symbol: row.symbol, side: row.side, quantity: order.quantity, product: order.product,
+        }, quote.price, prices);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        await pool.query(
+          "UPDATE practice_orders SET status = 'rejected', rejection_reason = $2 WHERE id = $1 AND status = 'open'",
+          [row.id, error instanceof Error ? error.message : "The order could not be filled."],
+        );
+      }
+    } finally {
+      client.release();
+    }
+  }
+}
+
+export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, market: MarketFeed): Promise<void> {
+  market.onRefresh(() => fillLimitOrders(pool, market));
+
   app.get("/v1/practice/dashboard", async (request, reply) => {
     const id = userId(request);
     if (!id) return reply.code(401).send({ message: "Sign in to continue." });
     await ensurePortfolio(pool, id);
+    await fillLimitOrders(pool, market, id);
+    const quotes = await market.list();
+    const prices = pricesOf(quotes);
+    const status = market.status();
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -192,29 +230,16 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
       );
       const currentDay = new Date().toISOString().slice(0, 10);
       if (portfolio.rows[0]?.day_start_date !== currentDay) {
-        const currentValue = await portfolioValue(client, id);
+        const currentValue = await portfolioValue(client, id, prices);
         await client.query(
           "UPDATE practice_portfolios SET day_start_value = $2, day_start_date = $3 WHERE user_id = $1",
           [id, currentValue, currentDay],
         );
       }
-      const openOrders = await client.query<{
-        id: string; symbol: string; side: "buy" | "sell"; quantity: number; product: string;
-        order_type: "market" | "limit"; limit_price: string | null;
-      }>(
-        "SELECT id, symbol, side, quantity, product, order_type, limit_price FROM practice_orders WHERE user_id = $1 AND status = 'open' FOR UPDATE",
+      const openOrders = await client.query<{ side: "buy" | "sell"; quantity: number; limit_price: string | null }>(
+        "SELECT side, quantity, limit_price FROM practice_orders WHERE user_id = $1 AND status = 'open'",
         [id],
       );
-      for (const order of openOrders.rows) {
-        const quote = priceOf(order.symbol);
-        const limit = Number(order.limit_price);
-        const eligible = order.side === "buy" ? quote <= limit : quote >= limit;
-        if (order.order_type === "limit" && eligible) {
-          await applyFill(client, id, {
-            id: order.id, symbol: order.symbol, side: order.side, quantity: order.quantity, product: order.product,
-          }, quote);
-        }
-      }
       const portfolioData = await client.query<{
         cash: string; realized_pnl: string; day_start_value: string; leaderboard_opt_in: boolean;
         full_name: string | null; college: string | null;
@@ -239,7 +264,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
         [id],
       );
       const holdings = holdingsResult.rows.map((holding) => {
-        const quote = bySymbol.get(holding.symbol);
+        const quote = prices.get(holding.symbol);
         const marketPrice = quote?.price ?? Number(holding.average_cost);
         return {
           symbol: holding.symbol, name: quote?.name ?? holding.symbol, quantity: holding.quantity,
@@ -276,7 +301,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
           value: Number(entry.cash),
         };
         if (entry.symbol && entry.quantity) {
-          current.value += entry.quantity * (priceOf(entry.symbol) || Number(entry.average_cost));
+          current.value += entry.quantity * (prices.get(entry.symbol)?.price ?? Number(entry.average_cost));
         }
         ranked.set(entry.user_id, current);
       }
@@ -292,7 +317,11 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
       await client.query("COMMIT");
       return {
         user: { fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in },
-        market: { dataMode: "DEMO", lastUpdatedAt: null, quotes },
+        market: {
+          dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,
+          status: { isOpen: status.isOpen, reason: status.reason, nextChangeAt: status.nextChangeAt },
+          quotes,
+        },
         portfolio: {
           totalValue: portfolioValueNow, dayChange, dayChangePercent, availableCash,
           cash, investedValue,
@@ -320,7 +349,10 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
       const id = userId(request);
       if (!id) return reply.code(401).send({ message: "Sign in to continue." });
       const { symbol, side, product, orderType, quantity, limitPrice } = request.body;
-      const quote = bySymbol.get(symbol);
+      const quotes = await market.list();
+      const prices = pricesOf(quotes);
+      const quote = prices.get(symbol);
+      const isOpen = market.status().isOpen;
       if (!quote) {
         const message = "Choose a supported stock from the watchlist.";
         await ensurePortfolio(pool, id);
@@ -329,6 +361,12 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
       }
       if (orderType === "limit" && limitPrice === undefined) {
         const message = "Enter a valid limit price.";
+        await ensurePortfolio(pool, id);
+        await recordRejectedOrder(pool, id, request.body, message);
+        return reply.code(400).send({ message });
+      }
+      if (orderType === "market" && !isOpen) {
+        const message = `${closedMessage(market)} Place a limit order to queue it for the next session.`;
         await ensurePortfolio(pool, id);
         await recordRejectedOrder(pool, id, request.body, message);
         return reply.code(400).send({ message });
@@ -387,7 +425,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
         const order = created.rows[0];
         if (!order) throw new Error("Order could not be created.");
         if (orderType === "market") {
-          await applyFill(client, id, { id: order.id, symbol, side, quantity, product }, quote.price);
+          await applyFill(client, id, { id: order.id, symbol, side, quantity, product }, quote.price, prices);
         }
         await client.query("COMMIT");
         return reply.code(201).send({
@@ -397,7 +435,9 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
             status: orderType === "market" ? "filled" : "open", createdAt: order.created_at },
           estimatedValue: money(effectivePrice * quantity), charges: 0,
           total: money(effectivePrice * quantity),
-          message: orderType === "market" ? "Practice order filled." : "Limit order placed and waiting for its price condition.",
+          message: orderType === "market" ? "Practice order filled."
+            : isOpen ? "Limit order placed and waiting for its price condition."
+            : `Limit order queued. ${closedMessage(market)}`,
         });
       } catch (error) {
         await client.query("ROLLBACK");
@@ -447,7 +487,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool): 
         "UPDATE practice_portfolios SET cash = $2, realized_pnl = 0, day_start_value = $2, day_start_date = CURRENT_DATE, updated_at = now() WHERE user_id = $1",
         [id, initialCash],
       );
-      await recordSnapshot(client, id, "portfolio-reset");
+      await recordSnapshot(client, id, "portfolio-reset", pricesOf(await market.list()));
       await client.query("COMMIT");
       return { message: "Practice portfolio reset to ₹1,00,000. Your profile and leaderboard preference were kept." };
     } catch (error) {

@@ -10,7 +10,8 @@ const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR",
 
 type Quote = {
   symbol: string; name: string; price: number; change: number; changePercent: number;
-  open: number; high: number; low: number; close: number;
+  /** Day open; null until fetched for the latest session. */
+  open: number | null; high: number; low: number; close: number;
 };
 type Holding = {
   symbol: string; name: string; quantity: number; averageCost: number; lastPrice: number;
@@ -24,7 +25,11 @@ type Order = {
 };
 type Dashboard = {
   user: { fullName: string | null; college: string | null; leaderboardOptIn: boolean };
-  market: { dataMode: "DEMO"; lastUpdatedAt: string | null; quotes: Quote[] };
+  market: {
+    dataMode: "DELAYED"; lastUpdatedAt: string | null;
+    status: { isOpen: boolean; reason: string | null; nextChangeAt: string };
+    quotes: Quote[];
+  };
   portfolio: {
     totalValue: number; dayChange: number; dayChangePercent: number; availableCash: number;
     cash: number; investedValue: number; unrealizedPnl: number; realizedPnl: number;
@@ -34,6 +39,10 @@ type Dashboard = {
   leaderboard: { rank: number; displayName: string; returnPercent: number; isSelf: boolean }[];
   rules: { initialCash: number; charges: number; slippage: number; limitBandPercent: number };
 };
+
+const istTime = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+});
 
 function formatAmount(value: number) {
   return inr.format(value);
@@ -302,7 +311,14 @@ export default function AccountPage() {
           <h1>Welcome{dashboard.user.fullName ? `, ${dashboard.user.fullName.split(" ")[0]}` : " back"}.</h1>
           <p>Explore market mechanics and practice with virtual funds. No real money is involved.</p>
         </div>
-        <div className="xodash-demo-badge"><i /> DEMO MARKET DATA <span>·</span> NOT LIVE</div>
+        <div className={dashboard.market.status.isOpen ? "xodash-demo-badge xodash-market-open" : "xodash-demo-badge"}
+          title={dashboard.market.lastUpdatedAt ? `Prices updated ${istTime.format(new Date(dashboard.market.lastUpdatedAt))} IST` : undefined}>
+          <i /> NSE <span>·</span>{" "}
+          {dashboard.market.status.isOpen
+            ? <>MARKET OPEN <span>·</span> CLOSES {istTime.format(new Date(dashboard.market.status.nextChangeAt)).toUpperCase()}</>
+            : <>MARKET CLOSED <span>·</span> OPENS {istTime.format(new Date(dashboard.market.status.nextChangeAt)).toUpperCase()}</>}
+          {" "}<span>·</span> PRICES DELAYED ~10 MIN
+        </div>
       </section>
 
       {error && <p aria-live="polite" className="xodash-feedback xodash-error">{error}</p>}
@@ -319,7 +335,7 @@ export default function AccountPage() {
           </svg>
         </article>
         <article><span>Available cash</span><strong>{formatAmount(portfolio.availableCash)}</strong><small>After open buy orders</small></article>
-        <article><span>Invested value</span><strong>{formatAmount(portfolio.investedValue)}</strong><small>Current demo prices</small></article>
+        <article><span>Invested value</span><strong>{formatAmount(portfolio.investedValue)}</strong><small>At delayed market prices</small></article>
         <article><span>Unrealized P&amp;L</span><strong className={portfolio.unrealizedPnl >= 0 ? "xodash-positive" : "xodash-negative"}>{formatAmount(portfolio.unrealizedPnl)}</strong><small>Open positions</small></article>
         <article><span>Realized P&amp;L</span><strong className={portfolio.realizedPnl >= 0 ? "xodash-positive" : "xodash-negative"}>{formatAmount(portfolio.realizedPnl)}</strong><small>Closed positions</small></article>
       </section>
@@ -354,7 +370,7 @@ export default function AccountPage() {
           {selectedQuote && (
             <section aria-label={`${selectedQuote.name} market information`} className="xodash-panel xodash-chart-panel">
               <div className="xodash-panel-heading">
-                <div><p className="xodash-eyebrow">{selectedQuote.symbol} · DEMO QUOTE</p><h2>{selectedQuote.name}</h2></div>
+                <div><p className="xodash-eyebrow">{selectedQuote.symbol} · NSE · DELAYED</p><h2>{selectedQuote.name}</h2></div>
                 <div className="xodash-chart-price">{formatAmount(selectedQuote.price)}
                   <small className={selectedQuote.change >= 0 ? "xodash-positive" : "xodash-negative"}>
                     {selectedQuote.change >= 0 ? "+" : ""}{formatAmount(selectedQuote.change)} ({selectedQuote.changePercent.toFixed(2)}%)
@@ -377,7 +393,7 @@ export default function AccountPage() {
                 </div>
               </div>
               <div className="xodash-ohlc">
-                <span>Open <b>{formatAmount(selectedQuote.open)}</b></span>
+                <span>Open <b>{selectedQuote.open === null ? "—" : formatAmount(selectedQuote.open)}</b></span>
                 <span>High <b>{formatAmount(selectedQuote.high)}</b></span>
                 <span>Low <b>{formatAmount(selectedQuote.low)}</b></span>
                 <span>Previous close <b>{formatAmount(selectedQuote.close)}</b></span>

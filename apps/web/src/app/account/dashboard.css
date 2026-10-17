@@ -29,6 +29,8 @@
 .xodash-demo-badge { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #e5c98c; border-radius: 999px; background: #fffaf0; color: #775d27; font-size: 10px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .xodash-demo-badge i { width: 7px; height: 7px; border-radius: 50%; background: #d39a2d; }
 .xodash-demo-badge span { opacity: .5; }
+.xodash-market-open { border-color: #9fd3b8; background: #f1fbf5; color: #0f6a46; }
+.xodash-market-open i { background: #1f9d63; box-shadow: 0 0 0 3px rgba(31, 157, 99, .2); }
 .xodash-feedback { max-width: 1376px; margin: 0 auto 14px; padding: 11px 15px; border-radius: 8px; font-size: 13px; }
 .xodash-error { border: 1px solid #f0c5be; background: #fff2ef; color: #8b3025; }
 .xodash-notice { border: 1px solid #bcdcca; background: #eff9f2; color: #1c6946; }

@@ -2,17 +2,21 @@ import "dotenv/config";
 import pg from "pg";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { MarketFeed } from "./market/feed.js";
 
 const config = loadConfig();
 const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
+const market = new MarketFeed(pool);
 const app = await buildApp({
   pool,
   config,
+  market,
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
+    market.stop();
     await app.close();
     await pool.end();
   });
@@ -29,6 +33,7 @@ if (config.databaseUrl) {
 
 try {
   await app.listen({ host: config.host, port: config.port });
+  if (config.databaseUrl) market.start();
 } catch (error) {
   app.log.error("API startup failed.");
   console.error(error);

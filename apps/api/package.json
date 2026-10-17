@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "update-instruments": "tsx scripts/update-instruments.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",

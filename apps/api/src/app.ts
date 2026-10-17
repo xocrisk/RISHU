@@ -6,6 +6,7 @@ import type { ApiConfig } from "./config.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerOAuthRoutes } from "./oauth.js";
 import { registerPracticeRoutes } from "./practice.js";
+import { MarketFeed } from "./market/feed.js";
 import { registerStaticWeb } from "./static.js";
 
 function isValidationError(error: unknown): boolean {
@@ -19,6 +20,7 @@ function isRateLimitError(error: unknown): boolean {
 type AppDependencies = {
   pool: Pool;
   config: ApiConfig;
+  market?: MarketFeed;
 };
 
 export async function buildApp(dependencies: AppDependencies) {
@@ -52,7 +54,7 @@ export async function buildApp(dependencies: AppDependencies) {
     smtp: dependencies.config.smtp,
   });
   await registerOAuthRoutes(app, { pool: dependencies.pool, config: dependencies.config });
-  await registerPracticeRoutes(app, dependencies.pool);
+  await registerPracticeRoutes(app, dependencies.pool, dependencies.market ?? new MarketFeed(dependencies.pool));
   if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }
