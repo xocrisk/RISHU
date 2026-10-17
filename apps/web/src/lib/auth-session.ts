@@ -15,16 +15,16 @@ export function useAuthApi() {
 export async function createAuthSession(
   path: "/v1/auth/login" | "/v1/auth/signup",
   body: Record<string, unknown>,
-): Promise<{ success: true } | { success: false; message: string }> {
+): Promise<{ success: true; email: string | null } | { success: false; message: string }> {
   const response = await fetch(`${authApiOrigin}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(body),
   });
-  const result = await response.json() as { user?: unknown; message?: string };
+  const result = await response.json() as { user?: { email?: string | null }; message?: string };
   if (!response.ok || !result.user) {
     return { success: false, message: result.message ?? "Authentication could not be completed." };
   }
-  return { success: true };
+  return { success: true, email: result.user.email ?? null };
 }

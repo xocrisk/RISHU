@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
 import { authApiOrigin, createAuthSession } from "../../lib/auth-session";
+import { prefetchDashboard } from "../../lib/dashboard-cache";
 
 type Mode = "login" | "request-reset" | "verify-reset";
 type Status = { kind: "ok" | "error"; text: string } | null;
@@ -78,6 +79,9 @@ export default function LoginForm() {
   const oauthResult = oauthMessages[new URLSearchParams(search).get("oauth") ?? ""];
   const visibleStatus: Status = status ?? (oauthResult ? { kind: oauthResult.error ? "error" : "ok", text: oauthResult.text } : null);
 
+  // Load the dashboard's code ahead of time so the jump after logging in is instant.
+  useEffect(() => { router.prefetch("/account"); }, [router]);
+
   useEffect(() => {
     let cancelled = false;
     fetch(`${authApiOrigin}/v1/auth/me`, { credentials: "include" })
@@ -121,7 +125,8 @@ export default function LoginForm() {
       if (!result.success) throw new Error(result.message);
       setPassword("");
       setStatus({ kind: "ok", text: "Logged in. Opening your dashboard…" });
-      window.setTimeout(() => router.replace("/account"), 500);
+      prefetchDashboard(result.email);
+      router.replace("/account");
     });
   }
 

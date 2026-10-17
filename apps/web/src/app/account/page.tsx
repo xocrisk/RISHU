@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuthApi } from "../../lib/auth-session";
+import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
+import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
 import { istDateTime, istDayFullYear, istTimeSeconds, percent, price, tone } from "./format";
 import OrderWindow, { type OrderRequest } from "./order-window";
 import { AnalyticsView, DashboardView, InsightsView, PortfolioView, SettingsView, StockIcon, SupportView, TradeView, TrendsView } from "./pages";
@@ -32,6 +34,14 @@ const navSections: { title: string; items: NavItem[] }[] = [
     { id: "insights", label: "Insights", icon: "M3 3h14v11H3zM6 11l3-3 2 2 3-4M7 17h6" },
     { id: "analytics", label: "Analytics", icon: "M4 17V9M10 17V3M16 17v-6", badge: "Beta" },
     { id: "trends", label: "Market Trends", icon: "M3 15l4-5 3 3 7-8M3 17h14" },
+  ] },
+  { title: "Community", items: [
+    { id: "championship", label: "Championship", icon: "M6 3h8v4a4 4 0 01-8 0zM6 5H3v1a3 3 0 003 3M14 5h3v1a3 3 0 01-3 3M10 11v3M7 17h6M8 14h4v3H8z", badge: "LPU" },
+    { id: "community", label: "Community", icon: "M3 4h14v9H8l-4 3v-3H3zM6 8h8M6 10.5h5" },
+  ] },
+  { title: "Tools", items: [
+    { id: "ai", label: "XOCRISK AI", icon: "M10 2l1.8 4.7L16.5 8.5l-4.7 1.8L10 15l-1.8-4.7L3.5 8.5l4.7-1.8zM15.5 13l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z", badge: "AI" },
+    { id: "notes", label: "Notes", icon: "M5 2h7l4 4v12H5zM12 2v4h4M8 10h5M8 13h5" },
   ] },
   { title: "Help", items: [
     { id: "support", label: "Support", icon: "M10 17a7 7 0 100-14 7 7 0 000 14zM8 8a2 2 0 114 0c0 1.5-2 1.5-2 3M10 14h.01" },
@@ -68,6 +78,16 @@ export default function AccountPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Show this tab's last dashboard (if any) before the first paint, then refresh it.
+  // Read after hydration so the server-rendered HTML still matches.
+  useLayoutEffect(() => {
+    const snapshot = readDashboardSnapshot<Dashboard>();
+    if (!snapshot) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off restore from sessionStorage before paint
+    setData((current) => current ?? snapshot);
+    setLoading(false);
+  }, []);
   const [pending, setPending] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>(tabFromHash);
@@ -88,13 +108,17 @@ export default function AccountPage() {
   }, []);
 
   const load = useCallback(async () => {
-    const response = await authFetch("/v1/practice/dashboard");
+    // Right after logging in, the login form has already started this request.
+    const response = await (takePrefetchedDashboard() ?? authFetch("/v1/practice/dashboard"));
     if (response.status === 401) {
+      clearDashboardSnapshot();
       router.replace("/login");
       return;
     }
     if (!response.ok) throw new Error("Dashboard service unavailable.");
-    setData(await response.json() as Dashboard);
+    const next = await response.json() as Dashboard;
+    setData(next);
+    saveDashboardSnapshot(next);
     setFetchedAt(new Date());
     setLoadError("");
   }, [authFetch, router]);
@@ -216,6 +240,7 @@ export default function AccountPage() {
     setPending(true);
     try {
       await authFetch("/v1/auth/logout", { method: "POST" });
+      clearDashboardSnapshot();
       router.replace("/login");
     } catch {
       toast("error", "Couldn't log out. Try again.");
@@ -229,6 +254,7 @@ export default function AccountPage() {
     try {
       const response = await authFetch("/v1/auth/account", { method: "DELETE" });
       if (!response.ok) throw new Error();
+      clearDashboardSnapshot();
       setDeletionRequested(true);
     } catch {
       toast("error", "Couldn't submit the deletion request. Try again.");
@@ -289,6 +315,10 @@ export default function AccountPage() {
         <div className="xq-welcome">
           <h2>Welcome<br />Back, {firstName}</h2>
           <p>Last login: {data.user.lastLoginAt ? istDayFullYear.format(new Date(data.user.lastLoginAt)) : "today"}</p>
+          {data.user.uid && (
+            <button className="xq-uid-chip" onClick={() => { void navigator.clipboard?.writeText(data.user.uid).then(() => toast("ok", "UID copied.")).catch(() => {}); }}
+              title="Copy your UID" type="button">UID <code>{data.user.uid}</code></button>
+          )}
         </div>
         <nav aria-label="Main">
           {navSections.map((section) => (
@@ -383,6 +413,10 @@ export default function AccountPage() {
           {tab === "insights" && <InsightsView data={data} onOpen={openStock} onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} quotes={quotes} />}
           {tab === "analytics" && <AnalyticsView data={data} quotes={quotes} />}
           {tab === "trends" && <TrendsView data={data} onOpen={openStock} onTrade={trade} />}
+          {tab === "championship" && <ChampionshipView notify={toast} onChanged={() => void load().catch(() => {})} />}
+          {tab === "community" && <CommunityView data={data} notify={toast} />}
+          {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
+          {tab === "notes" && <NotesView notify={toast} />}
           {tab === "support" && <SupportView />}
           {tab === "settings" && (
             <SettingsView data={data} onClearStarred={() => saveStarred([])} onDelete={() => void requestDeletion()} onLogout={() => void logout()}

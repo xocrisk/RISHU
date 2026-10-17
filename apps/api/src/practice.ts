@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import type { MarketFeed, Quote } from "./market/feed.js";
 import { instruments } from "./market/instruments.js";
+import { inRunningChampionship } from "./community.js";
 
 const initialCash = 100000;
 const orderSchema = {
@@ -44,17 +45,13 @@ function money(value: number | string): number {
 }
 
 async function ensurePortfolio(pool: Pool, id: string): Promise<void> {
+  // One round trip: create the portfolio if needed, and record its first snapshot when it's new.
   await pool.query(
-    `INSERT INTO practice_portfolios (user_id) VALUES ($1)
-     ON CONFLICT (user_id) DO NOTHING`,
-    [id],
-  );
-  await pool.query(
-    `INSERT INTO practice_portfolio_snapshots (user_id, portfolio_value, reason)
-     SELECT user_id, cash, 'session-start' FROM practice_portfolios
-     WHERE user_id = $1 AND NOT EXISTS (
-       SELECT 1 FROM practice_portfolio_snapshots WHERE user_id = $1
-     )`,
+    `WITH created AS (
+       INSERT INTO practice_portfolios (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING RETURNING user_id, cash
+     )
+     INSERT INTO practice_portfolio_snapshots (user_id, portfolio_value, reason)
+     SELECT user_id, cash, 'session-start' FROM created`,
     [id],
   );
 }
@@ -219,139 +216,133 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
     if (!id) return reply.code(401).send({ message: "Sign in to continue." });
     await ensurePortfolio(pool, id);
     await fillLimitOrders(pool, market, id);
-    const quotes = await market.list();
+    const [quotes, indices] = await Promise.all([market.list(), market.indexQuotes()]);
     const prices = pricesOf(quotes);
     const status = market.status();
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const portfolio = await client.query<{ cash: string; day_start_value: string; day_start_date: string }>(
-        "SELECT cash, day_start_value, day_start_date::text FROM practice_portfolios WHERE user_id = $1 FOR UPDATE",
-        [id],
-      );
-      const currentDay = new Date().toISOString().slice(0, 10);
-      if (portfolio.rows[0]?.day_start_date !== currentDay) {
-        const currentValue = await portfolioValue(client, id, prices);
-        await client.query(
-          "UPDATE practice_portfolios SET day_start_value = $2, day_start_date = $3 WHERE user_id = $1",
-          [id, currentValue, currentDay],
-        );
-      }
-      const openOrders = await client.query<{ side: "buy" | "sell"; quantity: number; limit_price: string | null }>(
+
+    // These reads don't depend on each other, so they run in parallel (one network round trip, not six).
+    const [openOrders, portfolioData, holdingsResult, ordersResult, snapshots, leaderboard] = await Promise.all([
+      pool.query<{ side: "buy" | "sell"; quantity: number; limit_price: string | null }>(
         "SELECT side, quantity, limit_price FROM practice_orders WHERE user_id = $1 AND status = 'open'",
         [id],
-      );
-      const portfolioData = await client.query<{
-        cash: string; realized_pnl: string; day_start_value: string; leaderboard_opt_in: boolean;
-        full_name: string | null; college: string | null; email: string; mobile: string | null;
+      ),
+      pool.query<{
+        cash: string; realized_pnl: string; day_start_value: string; day_start_date: string; leaderboard_opt_in: boolean;
+        full_name: string | null; college: string | null; email: string; mobile: string | null; uid: string;
         member_since: Date; previous_login: Date | null; current_login: Date | null;
       }>(
-        `SELECT p.cash, p.realized_pnl, p.day_start_value, u.leaderboard_opt_in, u.full_name, u.college,
-           u.email, u.mobile, u.created_at AS member_since,
+        `SELECT p.cash, p.realized_pnl, p.day_start_value, p.day_start_date::text, u.leaderboard_opt_in, u.full_name, u.college,
+           u.email, u.mobile, u.uid, u.created_at AS member_since,
            -- The newest session is this visit; the one before it is the last login.
            (SELECT created_at FROM auth_sessions s WHERE s.user_id = u.id ORDER BY created_at DESC OFFSET 1 LIMIT 1) AS previous_login,
            (SELECT max(created_at) FROM auth_sessions s WHERE s.user_id = u.id) AS current_login
          FROM practice_portfolios p JOIN users u ON u.id = p.user_id WHERE p.user_id = $1`,
         [id],
-      );
-      const holdingsResult = await client.query<{
-        symbol: string; quantity: number; average_cost: string; realized_pnl: string;
-      }>("SELECT symbol, quantity, average_cost, realized_pnl FROM practice_holdings WHERE user_id = $1 ORDER BY symbol", [id]);
-      const ordersResult = await client.query(
+      ),
+      pool.query<{ symbol: string; quantity: number; average_cost: string; realized_pnl: string }>(
+        "SELECT symbol, quantity, average_cost, realized_pnl FROM practice_holdings WHERE user_id = $1 ORDER BY symbol",
+        [id],
+      ),
+      pool.query(
         `SELECT id, symbol, side, product, order_type AS "orderType", quantity,
           limit_price AS "limitPrice", fill_price AS "fillPrice", status, created_at AS "createdAt",
           filled_at AS "filledAt", rejection_reason AS "rejectionReason"
          FROM practice_orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
         [id],
-      );
-      const snapshots = await client.query<{ portfolio_value: string; created_at: Date }>(
+      ),
+      pool.query<{ portfolio_value: string; created_at: Date }>(
         `SELECT portfolio_value, created_at FROM practice_portfolio_snapshots
          WHERE user_id = $1 AND created_at >= date_trunc('day', now()) ORDER BY created_at`,
         [id],
-      );
-      const holdings = holdingsResult.rows.map((holding) => {
-        const quote = prices.get(holding.symbol);
-        const marketPrice = quote?.price ?? Number(holding.average_cost);
-        return {
-          symbol: holding.symbol, name: quote?.name ?? holding.symbol, quantity: holding.quantity,
-          averageCost: Number(holding.average_cost), lastPrice: marketPrice,
-          currentValue: money(marketPrice * holding.quantity),
-          unrealizedPnl: money((marketPrice - Number(holding.average_cost)) * holding.quantity),
-          realizedPnl: Number(holding.realized_pnl),
-        };
-      });
-      const data = portfolioData.rows[0];
-      if (!data) throw new Error("Practice portfolio was not initialized.");
-      const cash = Number(data.cash);
-      const investedValue = money(holdings.reduce((total, holding) => total + holding.currentValue, 0));
-      const portfolioValueNow = money(cash + investedValue);
-      const reservedCash = openOrders.rows.filter((order) => order.side === "buy")
-        .reduce((total, order) => total + (Number(order.limit_price) * order.quantity), 0);
-      const availableCash = money(cash - reservedCash);
-      const dayChange = money(portfolioValueNow - Number(data.day_start_value));
-      const dayChangePercent = Number(data.day_start_value) === 0 ? 0 : money((dayChange / Number(data.day_start_value)) * 100);
-      const leaderboard = data.college ? await client.query<{
-        user_id: string; display_name: string; cash: string; symbol: string | null; quantity: number | null; average_cost: string | null;
-      }>(
+      ),
+      pool.query<{ user_id: string; display_name: string; cash: string; symbol: string | null; quantity: number | null; average_cost: string | null }>(
         `SELECT u.id AS user_id, COALESCE(NULLIF(u.full_name, ''), 'XOCRISK learner') AS display_name,
           p.cash, h.symbol, h.quantity, h.average_cost
          FROM users u JOIN practice_portfolios p ON p.user_id = u.id
          LEFT JOIN practice_holdings h ON h.user_id = u.id
-         WHERE u.leaderboard_opt_in = TRUE AND u.college = $1`,
-        [data.college],
-      ) : { rows: [] };
-      const ranked = new Map<string, { displayName: string; value: number }>();
-      for (const entry of leaderboard.rows) {
-        const current = ranked.get(entry.user_id) ?? {
-          displayName: entry.display_name,
-          value: Number(entry.cash),
-        };
-        if (entry.symbol && entry.quantity) {
-          current.value += entry.quantity * (prices.get(entry.symbol)?.price ?? Number(entry.average_cost));
-        }
-        ranked.set(entry.user_id, current);
-      }
-      const leaderboardRows = [...ranked.entries()]
-        .sort((first, second) => second[1].value - first[1].value)
-        .slice(0, 20)
-        .map(([participantId, entry], index) => ({
-          rank: index + 1,
-          displayName: entry.displayName,
-          returnPercent: money(((entry.value - initialCash) / initialCash) * 100),
-          isSelf: participantId === id,
-        }));
-      await client.query("COMMIT");
+         WHERE u.leaderboard_opt_in = TRUE AND u.college IS NOT NULL
+           AND u.college = (SELECT college FROM users WHERE id = $1)`,
+        [id],
+      ),
+    ]);
+
+    const data = portfolioData.rows[0];
+    if (!data) throw new Error("Practice portfolio was not initialized.");
+    const holdings = holdingsResult.rows.map((holding) => {
+      const quote = prices.get(holding.symbol);
+      const marketPrice = quote?.price ?? Number(holding.average_cost);
       return {
-        user: {
-          fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in,
-          email: data.email, mobile: data.mobile, memberSince: data.member_since,
-          lastLoginAt: data.previous_login ?? data.current_login,
-        },
-        market: {
-          dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,
-          status: { isOpen: status.isOpen, reason: status.reason, nextChangeAt: status.nextChangeAt },
-          quotes,
-          indices: await market.indexQuotes(),
-          nifty50: instruments.filter((instrument) => instrument.nifty50).map((instrument) => instrument.symbol),
-        },
-        portfolio: {
-          totalValue: portfolioValueNow, dayChange, dayChangePercent, availableCash,
-          cash, investedValue,
-          unrealizedPnl: money(holdings.reduce((total, holding) => total + holding.unrealizedPnl, 0)),
-          realizedPnl: Number(data.realized_pnl),
-          trend: snapshots.rows.map((snapshot) => ({ value: Number(snapshot.portfolio_value), time: snapshot.created_at })),
-        },
-        holdings,
-        orders: ordersResult.rows,
-        leaderboard: leaderboardRows,
-        rules: { initialCash, charges: 0, slippage: 0, limitBandPercent: 20 },
+        symbol: holding.symbol, name: quote?.name ?? holding.symbol, quantity: holding.quantity,
+        averageCost: Number(holding.average_cost), lastPrice: marketPrice,
+        currentValue: money(marketPrice * holding.quantity),
+        unrealizedPnl: money((marketPrice - Number(holding.average_cost)) * holding.quantity),
+        realizedPnl: Number(holding.realized_pnl),
       };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+    });
+    const cash = Number(data.cash);
+    const investedValue = money(holdings.reduce((total, holding) => total + holding.currentValue, 0));
+    const portfolioValueNow = money(cash + investedValue);
+
+    // First visit of a new day: today's change is measured from the value right now.
+    let dayStartValue = Number(data.day_start_value);
+    const currentDay = new Date().toISOString().slice(0, 10);
+    if (data.day_start_date !== currentDay) {
+      dayStartValue = portfolioValueNow;
+      await pool.query(
+        "UPDATE practice_portfolios SET day_start_value = $2, day_start_date = $3 WHERE user_id = $1 AND day_start_date <> $3",
+        [id, portfolioValueNow, currentDay],
+      );
     }
+
+    const reservedCash = openOrders.rows.filter((order) => order.side === "buy")
+      .reduce((total, order) => total + (Number(order.limit_price) * order.quantity), 0);
+    const availableCash = money(cash - reservedCash);
+    const dayChange = money(portfolioValueNow - dayStartValue);
+    const dayChangePercent = dayStartValue === 0 ? 0 : money((dayChange / dayStartValue) * 100);
+
+    const ranked = new Map<string, { displayName: string; value: number }>();
+    for (const entry of leaderboard.rows) {
+      const current = ranked.get(entry.user_id) ?? { displayName: entry.display_name, value: Number(entry.cash) };
+      if (entry.symbol && entry.quantity) {
+        current.value += entry.quantity * (prices.get(entry.symbol)?.price ?? Number(entry.average_cost));
+      }
+      ranked.set(entry.user_id, current);
+    }
+    const leaderboardRows = [...ranked.entries()]
+      .sort((first, second) => second[1].value - first[1].value)
+      .slice(0, 20)
+      .map(([participantId, entry], index) => ({
+        rank: index + 1,
+        displayName: entry.displayName,
+        returnPercent: money(((entry.value - initialCash) / initialCash) * 100),
+        isSelf: participantId === id,
+      }));
+
+    return {
+      user: {
+        fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in,
+        email: data.email, mobile: data.mobile, uid: data.uid, memberSince: data.member_since,
+        lastLoginAt: data.previous_login ?? data.current_login,
+      },
+      market: {
+        dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,
+        status: { isOpen: status.isOpen, reason: status.reason, nextChangeAt: status.nextChangeAt },
+        quotes,
+        indices,
+        nifty50: instruments.filter((instrument) => instrument.nifty50).map((instrument) => instrument.symbol),
+      },
+      portfolio: {
+        totalValue: portfolioValueNow, dayChange, dayChangePercent, availableCash,
+        cash, investedValue,
+        unrealizedPnl: money(holdings.reduce((total, holding) => total + holding.unrealizedPnl, 0)),
+        realizedPnl: Number(data.realized_pnl),
+        trend: snapshots.rows.map((snapshot) => ({ value: Number(snapshot.portfolio_value), time: snapshot.created_at })),
+      },
+      holdings,
+      orders: ordersResult.rows,
+      leaderboard: leaderboardRows,
+      rules: { initialCash, charges: 0, slippage: 0, limitBandPercent: 20 },
+    };
   });
 
   app.post<{ Body: { symbol: string; side: "buy" | "sell"; product: "delivery" | "intraday";
@@ -487,6 +478,9 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
   app.post("/v1/practice/reset", async (request, reply) => {
     const id = userId(request);
     if (!id) return reply.code(401).send({ message: "Sign in to continue." });
+    // A reset would wipe out losses, so it isn't allowed while a championship you're in is running.
+    const championship = await inRunningChampionship(pool, id);
+    if (championship) return reply.code(400).send({ message: `You can't reset your portfolio while ${championship} is running.` });
     await ensurePortfolio(pool, id);
     const client = await pool.connect();
     try {

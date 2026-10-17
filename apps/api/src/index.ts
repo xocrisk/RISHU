@@ -5,7 +5,8 @@ import { loadConfig } from "./config.js";
 import { MarketFeed } from "./market/feed.js";
 
 const config = loadConfig();
-const pool = new pg.Pool({ connectionString: config.databaseUrl });
+// Keep connections open between requests: opening a new TLS connection to the database costs far more than a query.
+const pool = new pg.Pool({ connectionString: config.databaseUrl, idleTimeoutMillis: 5 * 60_000, keepAlive: true });
 
 const market = new MarketFeed(pool);
 const app = await buildApp({

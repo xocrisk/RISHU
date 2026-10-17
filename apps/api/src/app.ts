@@ -8,6 +8,7 @@ import { registerOAuthRoutes } from "./oauth.js";
 import { registerPracticeRoutes } from "./practice.js";
 import { MarketFeed } from "./market/feed.js";
 import { registerMarketRoutes } from "./market/routes.js";
+import { registerCommunityRoutes } from "./community.js";
 import { registerStaticWeb } from "./static.js";
 
 function isValidationError(error: unknown): boolean {
@@ -56,8 +57,10 @@ export async function buildApp(dependencies: AppDependencies) {
     smtp: dependencies.config.smtp,
   });
   await registerOAuthRoutes(app, { pool: dependencies.pool, config: dependencies.config });
-  await registerPracticeRoutes(app, dependencies.pool, dependencies.market ?? new MarketFeed(dependencies.pool));
+  const market = dependencies.market ?? new MarketFeed(dependencies.pool);
+  await registerPracticeRoutes(app, dependencies.pool, market);
   await registerMarketRoutes(app);
+  await registerCommunityRoutes(app, dependencies.pool, market);
   if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }

@@ -491,6 +491,7 @@ export function SettingsView({ data, pending, starredCount, onToggleLeaderboard,
         <h2 className="xq-panel-title">Profile</h2>
         <dl className="xq-dl">
           <div><dt>Name</dt><dd>{user.fullName ?? "—"}</dd></div>
+          <div><dt>UID</dt><dd><code className="xq-uid">{user.uid}</code></dd></div>
           <div><dt>Email</dt><dd>{user.email}</dd></div>
           <div><dt>Mobile</dt><dd>{user.mobile ? `+91 ${user.mobile}` : "—"}</dd></div>
           <div><dt>College</dt><dd>{user.college ?? "—"}</dd></div>

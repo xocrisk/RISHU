@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
 import { createAuthSession } from "../../lib/auth-session";
+import { prefetchDashboard } from "../../lib/dashboard-cache";
 import { collegesAToZ, highlightParts, searchColleges, type College } from "./college-search";
 
 const lpuName = "Lovely Professional University";
@@ -28,6 +29,7 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 
 export default function SignupForm() {
   const router = useRouter();
+  useEffect(() => { router.prefetch("/account"); }, [router]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -167,7 +169,8 @@ export default function SignupForm() {
       if (!result.success) throw new Error(result.message);
       setPassword("");
       setStatus({ kind: "ok", text: "Account created with ₹1,00,000 practice money. Opening your dashboard…" });
-      window.setTimeout(() => router.replace("/account"), 600);
+      prefetchDashboard(result.email);
+      router.replace("/account");
     } catch (error) {
       setStatus({ kind: "error", text: error instanceof Error ? error.message : "Something went wrong. Try again." });
     } finally {

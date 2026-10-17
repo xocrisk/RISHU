@@ -27,7 +27,7 @@ export type MarketStatus = { isOpen: boolean; reason: string | null; nextChangeA
 export type Dashboard = {
   user: {
     fullName: string | null; college: string | null; leaderboardOptIn: boolean;
-    email: string; mobile: string | null; memberSince: string; lastLoginAt: string | null;
+    email: string; mobile: string | null; uid: string; memberSince: string; lastLoginAt: string | null;
   };
   market: { dataMode: "DELAYED"; lastUpdatedAt: string | null; status: MarketStatus; quotes: Quote[]; indices: Quote[]; nifty50: string[] };
   portfolio: {
@@ -42,7 +42,7 @@ export type Dashboard = {
 };
 
 export type Tab = "dashboard" | "portfolio" | "wallet" | "watchlist" | "trade" | "transactions"
-  | "insights" | "analytics" | "trends" | "support" | "settings";
+  | "insights" | "analytics" | "trends" | "championship" | "community" | "ai" | "notes" | "support" | "settings";
 
 export type OrderTicket = { symbol: string; side: Side; quantity?: number; product?: Product; orderType?: OrderType; price?: number };
 
