@@ -39,6 +39,9 @@ export async function buildApp(dependencies: AppDependencies) {
     if (isRateLimitError(error)) {
       return reply.code(429).send({ message: "Too many attempts. Wait a while before trying again." });
     }
+    // Malformed requests (bad JSON, empty JSON body…) are the caller's mistake, not a server failure.
+    const status = typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : 500;
+    if (status >= 400 && status < 500) return reply.code(status).send({ message: "Invalid request." });
     request.log.error("Request failed.");
     return reply.code(500).send({ message: "The request could not be completed." });
   });
@@ -57,6 +60,8 @@ export async function buildApp(dependencies: AppDependencies) {
     sessionSecret: dependencies.config.sessionSecret,
     environment: dependencies.config.environment,
     smtp: dependencies.config.smtp,
+    supabase: dependencies.config.supabase,
+    webOrigins: allowedOrigins,
   });
   await registerOAuthRoutes(app, { pool: dependencies.pool, config: dependencies.config });
   const market = dependencies.market ?? new MarketFeed(dependencies.pool);

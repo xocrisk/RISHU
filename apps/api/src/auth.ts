@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import { normalizeIndianMobile } from "@xocrisk/core";
@@ -11,7 +12,7 @@ import {
   normalizeEmail,
   verifyPassword,
 } from "./security.js";
-import type { SmtpConfig } from "./config.js";
+import type { SmtpConfig, SupabaseConfig } from "./config.js";
 import nodemailer from "nodemailer";
 
 type AuthUser = {
@@ -116,7 +117,9 @@ export async function createSession(
 
 export async function registerAuthRoutes(
   app: FastifyInstance,
-  { pool, sessionSecret, environment, smtp }: { pool: Pool; sessionSecret: string; environment: string; smtp?: SmtpConfig },
+  { pool, sessionSecret, environment, smtp, supabase, webOrigins = [] }: {
+    pool: Pool; sessionSecret: string; environment: string; smtp?: SmtpConfig; supabase?: SupabaseConfig; webOrigins?: string[];
+  },
 ): Promise<void> {
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionHash", null);
@@ -292,6 +295,39 @@ export async function registerAuthRoutes(
       config: { rateLimit: { max: 3, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
+      const sent = { message: "If an account exists for that email, we've sent a password reset link. Check your inbox and spam folder." };
+      // Supabase sends the email: a link that opens /reset-password/ on the site the request came from.
+      if (supabase) {
+        const email = normalizeEmail(request.body.email);
+        if (!email) return reply.code(202).send(sent);
+        const user = await pool.query<{ id: string }>(
+          "SELECT id FROM users WHERE lower(email) = $1 AND deletion_requested_at IS NULL LIMIT 1", [email],
+        );
+        if (!user.rows[0]) return reply.code(202).send(sent);
+        const headers = { apikey: supabase.secretKey, Authorization: `Bearer ${supabase.secretKey}`, "Content-Type": "application/json" };
+        // Supabase can only email people it knows; XOCRISK keeps the password, so a placeholder one is set.
+        const created = await fetch(`${supabase.url}/auth/v1/admin/users`, {
+          method: "POST", headers, body: JSON.stringify({ email, email_confirm: true, password: randomBytes(24).toString("base64url") }),
+        });
+        if (!created.ok && created.status !== 422) {
+          request.log.error({ status: created.status }, "Supabase user could not be prepared for a password reset.");
+          return reply.code(503).send({ message: "Unable to send a password reset email right now. Try again later." });
+        }
+        const origin = request.headers.origin && webOrigins.includes(request.headers.origin) ? request.headers.origin : webOrigins[0];
+        const redirectTo = `${origin}/reset-password/`;
+        const recover = await fetch(`${supabase.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+          method: "POST", headers, body: JSON.stringify({ email }),
+        });
+        if (!recover.ok) {
+          // e.g. email_address_not_authorized: Supabase's built-in mailer only reaches team members until custom SMTP is set up.
+          const reason = await recover.json().catch(() => ({})) as { error_code?: string };
+          request.log.error({ status: recover.status, reason: reason.error_code }, "Supabase password reset email could not be sent.");
+          return reply.code(recover.status === 429 ? 429 : 503).send({
+            message: recover.status === 429 ? "Too many reset emails were sent. Wait a few minutes and try again." : "Unable to send a password reset email right now. Try again later.",
+          });
+        }
+        return reply.code(202).send(sent);
+      }
       if (!smtp) return reply.code(503).send({ message: "Email password recovery is not configured." });
       const email = normalizeEmail(request.body.email);
       if (!email) return reply.code(202).send({ message: "If an account exists for that email, a reset code has been sent." });
@@ -397,6 +433,94 @@ export async function registerAuthRoutes(
   app.get("/v1/auth/me", async (request, reply) => {
     if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
     return { user: publicUser(request.authUser) };
+  });
+
+  // Google (and any other Supabase Auth provider): the browser signs in with Supabase, then hands us its
+  // access token. We ask Supabase who it belongs to, and sign that verified email into XOCRISK.
+  app.post<{ Body: { accessToken: string } }>("/v1/auth/supabase", {
+    schema: {
+      body: {
+        type: "object", additionalProperties: false, required: ["accessToken"],
+        properties: { accessToken: { type: "string", minLength: 20, maxLength: 4096 } },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ message: "Google sign-in isn't set up yet. Use your email and password." });
+    const response = await fetch(`${supabase.url}/auth/v1/user`, {
+      headers: { apikey: supabase.secretKey, Authorization: `Bearer ${request.body.accessToken}` },
+    });
+    if (!response.ok) return reply.code(401).send({ message: "Your Google sign-in expired. Try again." });
+    const identity = await response.json() as {
+      email?: string; email_confirmed_at?: string | null; user_metadata?: { full_name?: string; name?: string };
+    };
+    const email = normalizeEmail(identity.email ?? "");
+    if (!email || !identity.email_confirmed_at) {
+      return reply.code(403).send({ message: "That account's email isn't verified yet." });
+    }
+
+    const select = () => pool.query<AuthUser & { deletion_requested_at: Date | null }>(
+      "SELECT id, email, mobile, full_name, college, deletion_requested_at FROM users WHERE lower(email) = $1 LIMIT 1", [email],
+    );
+    let user = (await select()).rows[0];
+    let created = false;
+    if (!user) {
+      const fullName = (identity.user_metadata?.full_name ?? identity.user_metadata?.name ?? "").trim().slice(0, 80) || null;
+      try {
+        // Continuing with Google on the login page carries the same 18+ confirmation as the signup form.
+        const inserted = await pool.query<AuthUser & { deletion_requested_at: Date | null }>(
+          `INSERT INTO users (email, full_name, adult_consent_at, email_verified_at) VALUES ($1, $2, now(), now())
+           RETURNING id, email, mobile, full_name, college, deletion_requested_at`,
+          [email, fullName],
+        );
+        user = inserted.rows[0];
+        created = true;
+      } catch (error) {
+        if (!(typeof error === "object" && error !== null && "code" in error && error.code === "23505")) throw error;
+        user = (await select()).rows[0];
+      }
+    }
+    if (!user || user.deletion_requested_at) return reply.code(403).send({ message: "This account has been deleted." });
+
+    const app = isAppClient(request);
+    const token = await createSession(pool, user.id, sessionSecret, app ? appSessionLifetimeMs : sessionLifetimeMs);
+    return reply.header("Set-Cookie", sessionCookie(token, environment))
+      .send({ user: publicUser(user), created, ...(app ? { token } : {}) });
+  });
+
+  // The reset link from Supabase's email lands on /reset-password/ with a short-lived Supabase token that proves
+  // the person owns the email. That token plus the new password sets the XOCRISK password.
+  app.post<{ Body: { accessToken: string; password: string } }>("/v1/auth/password-reset/link", {
+    schema: {
+      body: {
+        type: "object", additionalProperties: false, required: ["accessToken", "password"],
+        properties: {
+          accessToken: { type: "string", minLength: 20, maxLength: 4096 },
+          password: { type: "string", minLength: 10, maxLength: 128 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
+  }, async (request, reply) => {
+    if (!supabase) return reply.code(503).send({ message: "Email password recovery is not configured." });
+    const headers = { apikey: supabase.secretKey, Authorization: `Bearer ${request.body.accessToken}` };
+    const response = await fetch(`${supabase.url}/auth/v1/user`, { headers });
+    if (!response.ok) return reply.code(401).send({ message: "This reset link has expired. Request a new one." });
+    const identity = await response.json() as { email?: string };
+    const email = normalizeEmail(identity.email ?? "");
+    if (!email) return reply.code(401).send({ message: "This reset link has expired. Request a new one." });
+
+    const passwordHash = await hashPassword(request.body.password);
+    const updated = await pool.query<{ id: string }>(
+      "UPDATE users SET password_hash = $2 WHERE lower(email) = $1 AND deletion_requested_at IS NULL RETURNING id", [email, passwordHash],
+    );
+    const user = updated.rows[0];
+    if (!user) return reply.code(404).send({ message: "No XOCRISK account uses that email." });
+    // Everyone signed in with the old password is signed out, and the reset link can't be used again.
+    await pool.query("DELETE FROM auth_sessions WHERE user_id = $1", [user.id]);
+    await fetch(`${supabase.url}/auth/v1/logout?scope=global`, { method: "POST", headers }).catch(() => undefined);
+    return reply.header("Set-Cookie", expiredSessionCookie(environment))
+      .send({ message: "Password updated. Log in with your new password." });
   });
 
   app.put<{ Body: { fullName: string; mobile: string } }>("/v1/auth/profile", {

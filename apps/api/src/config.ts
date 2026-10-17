@@ -13,10 +13,20 @@ export type ApiConfig = {
   microsoftOAuth?: OAuthProviderConfig & { tenantId: string };
   smtp?: SmtpConfig;
   razorpay?: RazorpayConfig;
+  supabase?: SupabaseConfig;
   webRoot?: string;
 };
 
 export type RazorpayConfig = { keyId: string; keySecret: string };
+export type SupabaseConfig = { url: string; secretKey: string };
+
+function optionalSupabase(): SupabaseConfig | undefined {
+  const url = process.env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (!url && !secretKey) return undefined;
+  if (!url || !secretKey) throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY must be configured together");
+  return { url, secretKey };
+}
 
 function optionalRazorpay(): RazorpayConfig | undefined {
   const keyId = process.env.RAZORPAY_KEY_ID?.trim();
@@ -90,14 +100,15 @@ export function loadConfig(): ApiConfig {
     );
     sessionSecret = randomBytes(32).toString("hex");
   }
-  const webOrigin = process.env.WEB_ORIGIN?.trim() || process.env.RENDER_EXTERNAL_URL || "http://localhost:3000";
+  const webOrigin = process.env.WEB_ORIGIN?.trim() || "http://localhost:3000";
   if (!process.env.WEB_ORIGIN?.trim()) console.warn(`WEB_ORIGIN is not set; allowing CORS from ${webOrigin}.`);
   const databaseUrl = process.env.DATABASE_URL?.trim() || undefined;
   if (!databaseUrl) console.warn("DATABASE_URL is not set; database-backed routes will fail until it is configured.");
 
   return {
     environment: process.env.NODE_ENV ?? "development",
-    host: process.env.HOST ?? (process.env.RENDER ? "0.0.0.0" : "127.0.0.1"),
+    // Production hosts need every interface; locally "localhost" covers both 127.0.0.1 and ::1.
+    host: process.env.HOST ?? (process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"),
     port,
     webOrigin,
     databaseUrl,
@@ -109,6 +120,7 @@ export function loadConfig(): ApiConfig {
     })(),
     smtp: optionalSmtp(),
     razorpay: optionalRazorpay(),
+    supabase: optionalSupabase(),
     webRoot: resolveWebRoot(),
   };
 }

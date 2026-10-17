@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
 import { apiFetch, authApiOrigin, createAuthSession, isNativeApp } from "../../lib/auth-session";
 import { prefetchDashboard } from "../../lib/dashboard-cache";
+import { startGoogleLogin, supabaseConfigured } from "../../lib/supabase";
 
 type Mode = "login" | "request-reset" | "verify-reset";
 type Status = { kind: "ok" | "error"; text: string } | null;
@@ -81,6 +82,12 @@ export default function LoginForm() {
   // Load the dashboard's code ahead of time so the jump after logging in is instant.
   useEffect(() => { router.prefetch("/account"); }, [router]);
 
+  // If Supabase sent Google's return to the site's home page instead of /sso-callback/, finish there.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("code") || params.has("error_description")) router.replace(`/sso-callback/?${params.toString()}`);
+  }, [router]);
+
   useEffect(() => {
     let cancelled = false;
     apiFetch("/v1/auth/me")
@@ -144,7 +151,12 @@ export default function LoginForm() {
     }
     setIdError("");
     await run(async () => {
-      await postJson("/v1/auth/password-reset/request", { email });
+      const result = await postJson("/v1/auth/password-reset/request", { email });
+      // With Supabase the email holds a link to /reset-password/; without it, a 6-digit code typed in here.
+      if (supabaseConfigured) {
+        setStatus({ kind: "ok", text: result.message ?? "If that email has an account, a reset link is on its way." });
+        return;
+      }
       setMode("verify-reset");
       setStatus({ kind: "ok", text: "If that email has an account, a 6-digit reset code is on its way." });
     });
@@ -168,6 +180,12 @@ export default function LoginForm() {
 
   function beginProviderLogin(provider: "google" | "microsoft") {
     setPending(true);
+    if (provider === "google" && supabaseConfigured) {
+      void startGoogleLogin().then((problem) => {
+        if (problem) { setPending(false); setStatus({ kind: "error", text: problem }); }
+      });
+      return;
+    }
     const returnOrigin = encodeURIComponent(window.location.origin);
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = `${authApiOrigin}/v1/auth/oauth/${provider}/start?returnOrigin=${returnOrigin}`;
@@ -192,10 +210,12 @@ export default function LoginForm() {
   if (mode === "request-reset") {
     return (
       <form noValidate onSubmit={handleResetRequest}>
-        <p className="hint">Enter the email on your account. We&apos;ll send a 6-digit code to reset your password.</p>
+        <p className="hint">Enter the email on your account. We&apos;ll send {supabaseConfigured ? "a link" : "a 6-digit code"} to reset your password.</p>
         {identifierField("Email", "you@college.edu")}
         {statusBox}
-        <button className="primary" disabled={pending} type="submit"><Busy busy="Sending code" idle="Send reset code" pending={pending} /></button>
+        <button className="primary" disabled={pending} type="submit">
+          <Busy busy="Sending" idle={supabaseConfigured ? "Send reset link" : "Send reset code"} pending={pending} />
+        </button>
         <button className="link centered" onClick={() => switchMode("login")} type="button">Back to log in</button>
       </form>
     );

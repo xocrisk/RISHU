@@ -2,8 +2,9 @@ import "dotenv/config";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
+import { databaseConfig } from "../src/db.js";
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool(databaseConfig(process.env.DATABASE_URL));
 
 async function migrate() {
   await pool.query("SELECT 1");

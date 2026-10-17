@@ -2,11 +2,12 @@ import "dotenv/config";
 import pg from "pg";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { databaseConfig } from "./db.js";
 import { MarketFeed } from "./market/feed.js";
 
 const config = loadConfig();
 // Keep connections open between requests: opening a new TLS connection to the database costs far more than a query.
-const pool = new pg.Pool({ connectionString: config.databaseUrl, idleTimeoutMillis: 5 * 60_000, keepAlive: true });
+const pool = new pg.Pool({ ...databaseConfig(config.databaseUrl), idleTimeoutMillis: 5 * 60_000, keepAlive: true });
 
 const market = new MarketFeed(pool);
 const app = await buildApp({
