@@ -11,6 +11,21 @@ export const maxDuration = 60;
 type Method = "GET" | "HEAD" | "POST" | "PUT" | "DELETE" | "OPTIONS";
 
 async function handle(request: Request): Promise<Response> {
+  try {
+    return await forward(request);
+  } catch (error) {
+    // Without this the platform answers with an empty 500 and the page can't show any message.
+    console.error("XOCRISK API failed before it could answer:", error);
+    const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    return Response.json({
+      message: "XOCRISK is having trouble right now. Try again in a minute.",
+      // Short, credential-free reason to make a broken deployment diagnosable from outside.
+      detail: /:\/\/|@|password/i.test(text) ? "hidden" : text.slice(0, 200),
+    }, { status: 503 });
+  }
+}
+
+async function forward(request: Request): Promise<Response> {
   const app = await serverlessApp(waitUntil);
   const url = new URL(request.url);
   // Pages use trailing slashes; API routes don't.

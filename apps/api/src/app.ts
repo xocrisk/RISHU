@@ -55,6 +55,22 @@ export async function buildApp(dependencies: AppDependencies) {
   await app.register(cors, { origin: allowedOrigins, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   app.get("/health", async () => ({ status: "ok" }));
+  // What's configured on this deployment, as yes/no only (never values), for checking a live site from outside.
+  app.get("/v1/health", async () => {
+    const { config } = dependencies;
+    let database: "ok" | "missing" | "unreachable" = config.databaseUrl ? "ok" : "missing";
+    if (config.databaseUrl) {
+      try { await dependencies.pool.query("SELECT 1 FROM users LIMIT 1"); } catch { database = "unreachable"; }
+    }
+    return {
+      status: database === "ok" && !config.problems.length ? "ok" : "degraded",
+      database,
+      sessionSecret: Boolean(process.env.AUTH_SESSION_SECRET && Buffer.byteLength(process.env.AUTH_SESSION_SECRET.trim()) >= 32),
+      supabase: Boolean(config.supabase),
+      webOrigin: config.webOrigin,
+      problems: config.problems,
+    };
+  });
   await registerAuthRoutes(app, {
     pool: dependencies.pool,
     sessionSecret: dependencies.config.sessionSecret,
