@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
 import { authApiOrigin, createAuthSession } from "../../lib/auth-session";
 
-type LoginFormProps = { initialMessage?: string };
-type FormMode = "login" | "request-reset" | "verify-reset";
+type Mode = "login" | "request-reset" | "verify-reset";
+type Status = { kind: "ok" | "error"; text: string } | null;
 
 const oauthMessages: Record<string, { text: string; error: boolean }> = {
   link: { text: "Provider verified. Log in with your XOCRISK password once to securely link it.", error: false },
@@ -21,20 +22,36 @@ function subscribeToLocation(callback: () => void) {
   return () => window.removeEventListener("popstate", callback);
 }
 
+async function postJson(path: string, body: Record<string, unknown>): Promise<{ message?: string }> {
+  const response = await fetch(`${authApiOrigin}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => ({})) as { message?: string };
+  if (!response.ok) throw new Error(result.message ?? "Something went wrong. Try again.");
+  return result;
+}
+
+function Busy({ pending, idle, busy }: { pending: boolean; idle: string; busy: string }) {
+  return <>{pending && <span aria-hidden="true" className="spinner" />}<span>{pending ? busy : idle}</span></>;
+}
+
 function GoogleMark() {
   return (
-    <svg aria-hidden="true" className="google-mark" viewBox="0 0 48 48">
-      <path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.9 6.1-15Z" />
-      <path fill="#34A853" d="M24 44c5.5 0 10.2-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z" />
-      <path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z" />
-      <path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.2 6 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z" />
+    <svg aria-hidden="true" viewBox="0 0 48 48">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
     </svg>
   );
 }
 
 function MicrosoftMark() {
   return (
-    <svg aria-hidden="true" className="microsoft-mark" viewBox="0 0 24 24">
+    <svg aria-hidden="true" viewBox="0 0 24 24">
       <path fill="#F25022" d="M1 1h10v10H1z" />
       <path fill="#7FBA00" d="M13 1h10v10H13z" />
       <path fill="#00A4EF" d="M1 13h10v10H1z" />
@@ -43,201 +60,197 @@ function MicrosoftMark() {
   );
 }
 
-export default function LoginForm({ initialMessage = "" }: LoginFormProps) {
+export default function LoginForm() {
   const router = useRouter();
   const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, () => "");
-  const [mode, setMode] = useState<FormMode>("login");
+  const [mode, setMode] = useState<Mode>("login");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
+  const [remember, setRemember] = useState(true);
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [idError, setIdError] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [status, setStatus] = useState<Status>(null);
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState(initialMessage);
-  const [isError, setIsError] = useState(Boolean(initialMessage));
+  const [loggedIn, setLoggedIn] = useState(false);
   const oauthResult = oauthMessages[new URLSearchParams(search).get("oauth") ?? ""];
-  const visibleMessage = message || oauthResult?.text || "";
-  const visibleIsError = message ? isError : oauthResult?.error ?? isError;
+  const visibleStatus: Status = status ?? (oauthResult ? { kind: oauthResult.error ? "error" : "ok", text: oauthResult.text } : null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedIdentifier = identifier.trim();
-    if ((!isValidEmail(normalizedIdentifier) && !normalizeIndianMobile(normalizedIdentifier)) || !password) {
-      setMessage("Enter a valid mobile number or email address, and your password.");
-      setIsError(true);
-      return;
-    }
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${authApiOrigin}/v1/auth/me`, { credentials: "include" })
+      .then((response) => { if (!cancelled && response.ok) setLoggedIn(true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setStatus(null);
+    setIdError("");
+    setPwError("");
+  }
+
+  async function run(action: () => Promise<void>) {
     setPending(true);
-    setMessage("");
-    setIsError(false);
+    setStatus(null);
     try {
-      const result = await createAuthSession("/v1/auth/login", {
-        identifier: normalizedIdentifier,
-        password,
-        rememberMe,
-      });
-      if (!result.success) throw new Error(result.message);
-      router.replace("/account");
+      await action();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to sign in. Try again.");
-      setIsError(true);
+      setStatus({ kind: "error", text: error instanceof Error ? error.message : "Something went wrong. Try again." });
     } finally {
       setPending(false);
     }
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus(null);
+    const id = identifier.trim();
+    const nextIdError = !id ? "Enter your mobile number or email."
+      : !isValidEmail(id) && !normalizeIndianMobile(id) ? "That doesn't look like a mobile number or email." : "";
+    const nextPwError = password ? "" : "Enter your password.";
+    setIdError(nextIdError);
+    setPwError(nextPwError);
+    if (nextIdError) { document.getElementById("login-id")?.focus(); return; }
+    if (nextPwError) { document.getElementById("login-pw")?.focus(); return; }
+    await run(async () => {
+      const result = await createAuthSession("/v1/auth/login", { identifier: id, password, rememberMe: remember });
+      if (!result.success) throw new Error(result.message);
+      setPassword("");
+      setStatus({ kind: "ok", text: "Logged in. Opening your dashboard…" });
+      window.setTimeout(() => router.replace("/account"), 500);
+    });
   }
 
   async function handleResetRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setMessage("");
-    setIsError(false);
-    try {
-      const response = await fetch(`${authApiOrigin}/v1/auth/password-reset/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: resetEmail.trim() }),
-      });
-      const result = await response.json() as { message?: string };
-      if (!response.ok) throw new Error(result.message ?? "Could not send a reset code.");
-      setMode("verify-reset");
-      setMessage("If that email belongs to an account, a reset code is on its way.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not send a reset code. Try again.");
-      setIsError(true);
-    } finally {
-      setPending(false);
+    const email = identifier.trim();
+    if (!isValidEmail(email)) {
+      setIdError("Enter the email address on your account.");
+      document.getElementById("login-id")?.focus();
+      return;
     }
+    setIdError("");
+    await run(async () => {
+      await postJson("/v1/auth/password-reset/request", { email });
+      setMode("verify-reset");
+      setStatus({ kind: "ok", text: "If that email has an account, a 6-digit reset code is on its way." });
+    });
   }
 
   async function handleResetComplete(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setMessage("");
-    setIsError(false);
-    try {
-      const response = await fetch(`${authApiOrigin}/v1/auth/password-reset/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: resetEmail.trim(), code: resetCode.trim(), password: newPassword }),
+    if (!/^\d{6}$/.test(resetCode)) { setStatus({ kind: "error", text: "Enter the 6-digit code." }); return; }
+    if (newPassword.length < 10) { setStatus({ kind: "error", text: "Use at least 10 characters for the new password." }); return; }
+    await run(async () => {
+      const result = await postJson("/v1/auth/password-reset/complete", {
+        email: identifier.trim(), code: resetCode, password: newPassword,
       });
-      const result = await response.json() as { message?: string };
-      if (!response.ok) throw new Error(result.message ?? "Could not update the password.");
       setMode("login");
       setPassword("");
-      setMessage(result.message ?? "Password updated. Please log in.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not update the password. Try again.");
-      setIsError(true);
-    } finally {
-      setPending(false);
-    }
+      setResetCode("");
+      setNewPassword("");
+      setStatus({ kind: "ok", text: result.message ?? "Password updated. Log in with your new password." });
+    });
   }
 
   function beginProviderLogin(provider: "google" | "microsoft") {
     setPending(true);
     const returnOrigin = encodeURIComponent(window.location.origin);
-    // This intentionally navigates to the external API OAuth authorization endpoint.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = `${authApiOrigin}/v1/auth/oauth/${provider}/start?returnOrigin=${returnOrigin}`;
   }
 
-  function showLogin() {
-    setMode("login");
-    setMessage("");
-    setIsError(false);
-  }
+  const statusBox = (
+    <div aria-live="polite" className={`status ${visibleStatus?.kind ?? ""}`} role="status">
+      {visibleStatus?.text ?? (loggedIn ? <>You&apos;re already logged in. <Link className="link" href="/account">Open dashboard</Link></> : "")}
+    </div>
+  );
+
+  const identifierField = (label: string, placeholder: string) => (
+    <div className="field">
+      <label htmlFor="login-id">{label}</label>
+      <input aria-describedby="login-id-err" aria-invalid={idError ? "true" : "false"} autoComplete="username" className="input"
+        id="login-id" inputMode="email" name="identifier" onChange={(event) => { setIdentifier(event.target.value); setIdError(""); }}
+        placeholder={placeholder} required type="text" value={identifier} />
+      <div aria-live="polite" className="err" id="login-id-err">{idError}</div>
+    </div>
+  );
 
   if (mode === "request-reset") {
     return (
-      <div className="login-form-wrap">
-        <p className="recovery-intro">Enter the email address on your account. We’ll send a one-time reset code if it matches.</p>
-        <form className="login-form" onSubmit={handleResetRequest}>
-          <div className="auth-field">
-            <label className="field-label" htmlFor="reset-email">Email address</label>
-            <input autoComplete="email" className="text-field" id="reset-email" onChange={(event) => setResetEmail(event.target.value)}
-              placeholder="you@college.edu" required type="email" value={resetEmail} />
-          </div>
-          <div aria-live="polite" className={isError ? "form-message form-error" : "form-message"}>{message}</div>
-          <button className="submit-button" disabled={pending} type="submit">{pending ? "Sending..." : "Send reset code"}</button>
-          <button className="text-link recovery-back" onClick={showLogin} type="button">Back to log in</button>
-        </form>
-      </div>
+      <form noValidate onSubmit={handleResetRequest}>
+        <p className="hint">Enter the email on your account. We&apos;ll send a 6-digit code to reset your password.</p>
+        {identifierField("Email", "you@college.edu")}
+        {statusBox}
+        <button className="primary" disabled={pending} type="submit"><Busy busy="Sending code" idle="Send reset code" pending={pending} /></button>
+        <button className="link centered" onClick={() => switchMode("login")} type="button">Back to log in</button>
+      </form>
     );
   }
 
   if (mode === "verify-reset") {
     return (
-      <div className="login-form-wrap">
-        <p className="recovery-intro">Enter the six-digit code sent to your email and choose a new password.</p>
-        <form className="login-form" onSubmit={handleResetComplete}>
-          <div className="auth-field">
-            <label className="field-label" htmlFor="reset-code">Reset code</label>
-            <input autoComplete="one-time-code" className="text-field" id="reset-code" inputMode="numeric"
-              maxLength={6} onChange={(event) => setResetCode(event.target.value.replace(/\D/g, ""))}
-              pattern="[0-9]{6}" required value={resetCode} />
+      <form noValidate onSubmit={handleResetComplete}>
+        <div className="field">
+          <label htmlFor="login-code">6-digit code</label>
+          <input autoComplete="one-time-code" className="input" id="login-code" inputMode="numeric" maxLength={6}
+            onChange={(event) => setResetCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="123456" type="text" value={resetCode} />
+        </div>
+        <div className="field">
+          <label htmlFor="login-new-pw">New password</label>
+          <div className="control with-btn">
+            <input autoComplete="new-password" className="input" id="login-new-pw" maxLength={128}
+              onChange={(event) => setNewPassword(event.target.value)} type={showPassword ? "text" : "password"} value={newPassword} />
+            <button aria-controls="login-new-pw" aria-pressed={showPassword} className="inline-btn"
+              onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? "Hide" : "Show"}</button>
           </div>
-          <div className="auth-field">
-            <label className="field-label" htmlFor="reset-new-password">New password</label>
-            <input autoComplete="new-password" className="text-field" id="reset-new-password"
-              minLength={10} onChange={(event) => setNewPassword(event.target.value)}
-              required type="password" value={newPassword} />
-          </div>
-          <div aria-live="polite" className={isError ? "form-message form-error" : "form-message"}>{message}</div>
-          <button className="submit-button" disabled={pending} type="submit">{pending ? "Updating..." : "Update password"}</button>
-          <button className="text-link recovery-back" onClick={() => { setMode("request-reset"); setMessage(""); setIsError(false); }} type="button">Send a new code</button>
-          <button className="text-link recovery-back" onClick={showLogin} type="button">Back to log in</button>
-        </form>
-      </div>
+          <div className="hint">At least 10 characters.</div>
+        </div>
+        {statusBox}
+        <button className="primary" disabled={pending} type="submit"><Busy busy="Updating" idle="Update password" pending={pending} /></button>
+        <button className="link centered" onClick={() => switchMode("request-reset")} type="button">Send a new code</button>
+        <button className="link centered" onClick={() => switchMode("login")} type="button">Back to log in</button>
+      </form>
     );
   }
 
   return (
-    <div className="login-form-wrap">
-      <form className="login-form" onSubmit={handleSubmit} noValidate>
-        <div className="auth-field">
-          <label className="field-label" htmlFor="login-identifier">Mobile number or email</label>
-          <input autoComplete="username" className="text-field" id="login-identifier"
-            inputMode="email" onChange={(event) => setIdentifier(event.target.value)}
-            placeholder="98765 43210 or you@college.edu" required value={identifier} />
+    <form noValidate onSubmit={handleLogin}>
+      {identifierField("Mobile number or email", "98765 43210 or you@college.edu")}
+
+      <div className="field">
+        <label htmlFor="login-pw">Password</label>
+        <div className="control with-btn">
+          <input aria-describedby="login-pw-err" aria-invalid={pwError ? "true" : "false"} autoComplete="current-password"
+            className="input" id="login-pw" name="password" onChange={(event) => { setPassword(event.target.value); setPwError(""); }}
+            required type={showPassword ? "text" : "password"} value={password} />
+          <button aria-controls="login-pw" aria-pressed={showPassword} className="inline-btn"
+            onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? "Hide" : "Show"}</button>
         </div>
-        <div className="auth-field">
-          <label className="field-label" htmlFor="login-password">Password</label>
-          <div className="password-field">
-            <input autoComplete="current-password" className="text-field" id="login-password"
-              onChange={(event) => setPassword(event.target.value)} required
-              type={showPassword ? "text" : "password"} value={password} />
-            <button aria-controls="login-password" aria-pressed={showPassword}
-              className="text-control" onClick={() => setShowPassword((visible) => !visible)}
-              type="button">{showPassword ? "Hide" : "Show"}</button>
-          </div>
-        </div>
-        <div className="remember-row">
-          <label className="remember-check" htmlFor="remember-me">
-            <input checked={rememberMe} id="remember-me" onChange={(event) => setRememberMe(event.target.checked)} type="checkbox" />
-            <span>Remember me</span>
-          </label>
-          <button className="text-link" onClick={() => { setResetEmail(identifier.includes("@") ? identifier.trim() : ""); setMode("request-reset"); setMessage(""); setIsError(false); }} type="button">
-            Forgot password?
-          </button>
-        </div>
-        <div aria-live="polite" className={visibleIsError ? "form-message form-error" : "form-message"}>{visibleMessage}</div>
-        <button className="submit-button" disabled={pending} type="submit">
-          {pending ? "Logging in..." : "Log in"}
-        </button>
-      </form>
-      <div className="auth-divider"><span>or continue with</span></div>
-      <div className="auth-providers">
-        <button disabled={pending} onClick={() => beginProviderLogin("google")} type="button">
-          <GoogleMark /> Google
-        </button>
-        <button disabled={pending} onClick={() => beginProviderLogin("microsoft")} type="button">
-          <MicrosoftMark /> Microsoft
-        </button>
+        <div aria-live="polite" className="err" id="login-pw-err">{pwError}</div>
       </div>
-    </div>
+
+      <div className="row">
+        <label className="check">
+          <input checked={remember} id="remember" name="remember" onChange={(event) => setRemember(event.target.checked)} type="checkbox" />
+          {" "}Keep me logged in
+        </label>
+        <button className="link" onClick={() => switchMode("request-reset")} type="button">Forgot password?</button>
+      </div>
+
+      {statusBox}
+      <button className="primary" disabled={pending} type="submit"><Busy busy="Logging in" idle="Log in" pending={pending} /></button>
+
+      <div className="divider">or</div>
+      <div className="social">
+        <button disabled={pending} onClick={() => beginProviderLogin("google")} type="button"><GoogleMark /> Google</button>
+        <button disabled={pending} onClick={() => beginProviderLogin("microsoft")} type="button"><MicrosoftMark /> Microsoft</button>
+      </div>
+    </form>
   );
 }

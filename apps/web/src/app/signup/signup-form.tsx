@@ -1,224 +1,321 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
 import { createAuthSession } from "../../lib/auth-session";
-import { collegeNotListed, collegeOptions } from "./college-options";
+import { collegesAToZ, highlightParts, searchColleges, type College } from "./college-search";
 
-const collegeNotListedLabel = "My college is not listed";
+const lpuName = "Lovely Professional University";
+// The API recognises LPU students by this exact college name.
+const lpuApiName = "Lovely Professional University (LPU)";
+const notListedLabel = "My college isn't listed";
+const commonPasswords = ["password123", "qwerty12345", "1234567890", "iloveyou123", "xocrisk1234"];
 
-function mobileInputValue(value: string): string {
-  let digits = value.replace(/\D/g, "");
-  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
-  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
-  return digits.slice(0, 10);
+type Field = "name" | "email" | "phone" | "college" | "collegeOther" | "lpu" | "password" | "terms";
+type Selection = College | "other" | null;
+
+const fieldIds: Record<Field, string> = {
+  name: "su-name", email: "su-email", phone: "su-phone", college: "su-college",
+  collegeOther: "su-college-other", lpu: "su-lpu", password: "su-pw", terms: "su-terms",
+};
+
+function Highlighted({ text, query }: { text: string; query: string }) {
+  return <>{highlightParts(text, query).map((part, index) =>
+    part.match ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>)}</>;
 }
-
-type SignupField =
-  | "fullName"
-  | "email"
-  | "mobile"
-  | "college"
-  | "customCollege"
-  | "lpuRegistrationNumber"
-  | "password"
-  | "adultConsent";
 
 export default function SignupForm() {
   const router = useRouter();
-  const [fullName, setFullName] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [college, setCollege] = useState("");
-  const [collegeOpen, setCollegeOpen] = useState(false);
-  const [customCollege, setCustomCollege] = useState("");
-  const [lpuRegistrationNumber, setLpuRegistrationNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [collegeText, setCollegeText] = useState("");
+  const [selection, setSelection] = useState<Selection>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [collegeOther, setCollegeOther] = useState("");
+  const [lpu, setLpu] = useState("");
   const [password, setPassword] = useState("");
-  const [adultConsent, setAdultConsent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [terms, setTerms] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<SignupField, string>>>({});
-  const enteredCollege = college === collegeNotListed ? customCollege.trim() : college;
-  const isLpu = enteredCollege === "Lovely Professional University (LPU)";
-  const collegeQuery = college === collegeNotListed ? "" : college.trim().toLowerCase();
-  const recommendedColleges = collegeOptions
-    .filter((collegeName) => collegeName.toLowerCase().includes(collegeQuery))
-    .slice(0, 6);
+  const listRef = useRef<HTMLUListElement>(null);
+  const otherRef = useRef<HTMLInputElement>(null);
+  const lpuRef = useRef<HTMLInputElement>(null);
 
-  function chooseCollege(selection: string) {
-    if (selection === collegeNotListed) {
-      setCustomCollege(college === collegeNotListed ? customCollege : college.trim());
-      setCollege(collegeNotListed);
-    } else {
-      setCollege(selection);
-      setCustomCollege("");
-    }
-    setCollegeOpen(false);
+  const isLpu = selection !== null && selection !== "other" && selection.name === lpuName;
+  const query = showAll ? "" : collegeText.trim();
+  const results = query ? searchColleges(query) : collegesAToZ;
+  const optionCount = results.length + 1; // + "not listed"
+
+  useEffect(() => {
+    if (!listOpen || !listRef.current) return;
+    const target = activeIndex >= 0
+      ? listRef.current.querySelector<HTMLElement>(`#college-opt-${activeIndex === results.length ? "other" : activeIndex}`)
+      : listRef.current.querySelector<HTMLElement>("li.current");
+    if (activeIndex >= 0) target?.scrollIntoView({ block: "nearest" });
+    else if (target) target.scrollIntoView({ block: "center" });
+    else listRef.current.scrollTop = 0;
+  }, [listOpen, activeIndex, query, results.length]);
+
+  function clearError(field: Field) {
+    setErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
-  function validateSignup(): boolean {
-    const nextErrors: Partial<Record<SignupField, string>> = {};
-    if (fullName.trim().length < 2) nextErrors.fullName = "Enter your full name (at least 2 characters).";
-    if (!isValidEmail(email)) nextErrors.email = "Enter a valid email address.";
-    if (!normalizeIndianMobile(mobile)) nextErrors.mobile = "Enter a valid 10-digit Indian mobile number.";
-    if (!college) nextErrors.college = "Search and select your college or choose the manual-entry option.";
-    else if (college !== collegeNotListed && !collegeOptions.includes(college)) {
-      nextErrors.college = "Choose a college from the suggestions or select the manual-entry option.";
+  function openList(all: boolean) {
+    setShowAll(all);
+    setActiveIndex(-1);
+    setListOpen(true);
+  }
+
+  function choose(index: number) {
+    if (index === results.length) {
+      setSelection("other");
+      setCollegeText(notListedLabel);
+      setLpu("");
+      setListOpen(false);
+      clearError("college");
+      window.setTimeout(() => otherRef.current?.focus(), 0);
+      return;
     }
-    if (college === collegeNotListed && customCollege.trim().length < 2) {
-      nextErrors.customCollege = "Enter your college or university name.";
+    const college = results[index];
+    if (!college) return;
+    setSelection(college);
+    setCollegeText(college.name);
+    setListOpen(false);
+    clearError("college");
+    if (college.name === lpuName) window.setTimeout(() => lpuRef.current?.focus(), 220);
+    else setLpu("");
+  }
+
+  function clearCollege() {
+    setCollegeText("");
+    setSelection(null);
+    setLpu("");
+    document.getElementById(fieldIds.college)?.focus();
+    openList(true);
+  }
+
+  function handleCollegeKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!listOpen) openList(selection !== null);
+      else setActiveIndex((index) => (index + 1) % optionCount);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + optionCount) % optionCount);
+    } else if (event.key === "Enter" && listOpen) {
+      event.preventDefault();
+      if (activeIndex >= 0) choose(activeIndex);
+      else if (results.length) choose(0);
+    } else if (event.key === "Escape") {
+      setListOpen(false);
     }
-    if (isLpu && !/^\d{8}$/.test(lpuRegistrationNumber.trim())) {
-      nextErrors.lpuRegistrationNumber = "Enter the 8-digit LPU registration number.";
+  }
+
+  function validate(): Partial<Record<Field, string>> {
+    const next: Partial<Record<Field, string>> = {};
+    if (name.trim().length < 2) next.name = "Enter your full name.";
+    if (!isValidEmail(email.trim())) next.email = "Enter a valid email address.";
+    if (!normalizeIndianMobile(phone)) next.phone = "Enter a 10-digit Indian mobile number.";
+    if (!selection) {
+      next.college = collegeText.trim()
+        ? "Pick your college from the list, or choose \"My college isn't listed\"."
+        : "Choose your college or university.";
     }
-    if (password.length < 10 || password.length > 128) {
-      nextErrors.password = "Use a password between 10 and 128 characters.";
+    if (selection === "other" && collegeOther.trim().length < 3) next.collegeOther = "Enter your college's name.";
+    if (isLpu) {
+      if (!lpu) next.lpu = "Enter your LPU registration number.";
+      else if (!/^\d{8}$/.test(lpu)) next.lpu = "Enter all 8 digits of your LPU registration number.";
     }
-    if (!adultConsent) nextErrors.adultConsent = "Confirm you are 18 or older and accept the terms.";
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    if (password.length < 10) next.password = "Use at least 10 characters.";
+    else if (password.length > 128) next.password = "Use 128 characters or fewer.";
+    else if (commonPasswords.includes(password.toLowerCase())) next.password = "That password is too common. Pick another.";
+    if (!terms) next.terms = "Confirm you're 18 or older and accept the terms.";
+    return next;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrors({});
+    setStatus(null);
+    const next = validate();
+    setErrors(next);
+    const firstInvalid = (Object.keys(fieldIds) as Field[]).find((field) => next[field]);
+    if (firstInvalid) {
+      document.getElementById(fieldIds[firstInvalid])?.focus();
+      return;
+    }
+    const mobile = normalizeIndianMobile(phone);
+    if (!mobile || !selection) return;
+    const college = selection === "other" ? collegeOther.trim() : isLpu ? lpuApiName : selection.name;
     setPending(true);
-    setMessage("");
-    setIsError(false);
     try {
-      if (!validateSignup()) {
-        setMessage("Please correct the highlighted fields.");
-        setIsError(true);
-        return;
-      }
-      const normalizedMobile = normalizeIndianMobile(mobile);
-      if (!normalizedMobile) throw new Error("Enter a valid 10-digit Indian mobile number.");
       const result = await createAuthSession("/v1/auth/signup", {
-        fullName: fullName.trim(),
+        fullName: name.trim(),
         email: email.trim().toLowerCase(),
-        mobile: normalizedMobile,
-        college: enteredCollege,
-        ...(isLpu ? { lpuRegistrationNumber: lpuRegistrationNumber.trim() } : {}),
+        mobile,
+        college,
+        ...(isLpu ? { lpuRegistrationNumber: lpu } : {}),
         password,
         adultConsent: true,
       });
       if (!result.success) throw new Error(result.message);
-      router.replace("/account");
+      setPassword("");
+      setStatus({ kind: "ok", text: "Account created with ₹1,00,000 practice money. Opening your dashboard…" });
+      window.setTimeout(() => router.replace("/account"), 600);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create your account. Try again.");
-      setIsError(true);
+      setStatus({ kind: "error", text: error instanceof Error ? error.message : "Something went wrong. Try again." });
     } finally {
       setPending(false);
     }
   }
 
-  function fieldError(field: SignupField) {
-    const error = errors[field];
-    return error ? <span className="field-error" role="alert">{error}</span> : null;
-  }
+  const invalid = (field: Field) => (errors[field] ? "true" : "false");
+  const errorText = (field: Field) => (
+    <div aria-live="polite" className="err" id={`${fieldIds[field]}-err`}>{errors[field] ?? ""}</div>
+  );
 
   return (
-    <form className="login-form" onSubmit={handleSubmit} noValidate>
-      <label className="field-label" htmlFor="signup-full-name">Full name</label>
-      <input aria-invalid={Boolean(errors.fullName)} autoComplete="name" className="text-field"
-        id="signup-full-name" maxLength={120} name="fullName" onChange={(event) => setFullName(event.target.value)}
-        required value={fullName} />
-      {fieldError("fullName")}
-
-      <label className="field-label field-spaced" htmlFor="signup-mobile">Mobile number</label>
-      <div aria-invalid={Boolean(errors.mobile)} className="mobile-number-field">
-        <span aria-hidden="true">+91</span>
-        <input autoComplete="tel-national" className="text-field"
-          id="signup-mobile" inputMode="numeric" name="mobile"
-          onChange={(event) => setMobile(mobileInputValue(event.target.value))}
-          placeholder="98765 43210" required type="tel" value={mobile} />
+    <form noValidate onSubmit={handleSubmit}>
+      <div className="field">
+        <label htmlFor="su-name">Full name</label>
+        <input aria-describedby="su-name-err" aria-invalid={invalid("name")} autoComplete="name" className="input"
+          id="su-name" maxLength={120} name="name" onChange={(event) => { setName(event.target.value); clearError("name"); }}
+          placeholder="As it should appear on your certificates" required type="text" value={name} />
+        {errorText("name")}
       </div>
-      {fieldError("mobile")}
 
-      <label className="field-label field-spaced" htmlFor="signup-email">Email address</label>
-      <input aria-invalid={Boolean(errors.email)} autoComplete="email" className="text-field"
-        id="signup-email" name="email" onChange={(event) => setEmail(event.target.value)}
-        placeholder="For email and password sign-in" required type="email" value={email} />
-      {fieldError("email")}
+      <div className="field">
+        <label htmlFor="su-email">Email</label>
+        <input aria-describedby="su-email-err" aria-invalid={invalid("email")} autoComplete="email" className="input"
+          id="su-email" name="email" onChange={(event) => { setEmail(event.target.value); clearError("email"); }}
+          placeholder="you@college.edu" required type="email" value={email} />
+        {errorText("email")}
+      </div>
 
-      <label className="field-label field-spaced" htmlFor="signup-college">College/University</label>
-      <div className="college-picker">
-        <input aria-autocomplete="list" aria-controls="signup-college-options" aria-expanded={collegeOpen}
-          aria-invalid={Boolean(errors.college)} autoComplete="off" className="text-field"
-          id="signup-college" name="college"
-          onBlur={() => window.setTimeout(() => setCollegeOpen(false), 120)}
-          onChange={(event) => setCollege(event.target.value)}
-          onFocus={() => setCollegeOpen(true)} onKeyDown={(event) => {
-            if (event.key === "Escape") setCollegeOpen(false);
-            if (event.key === "Enter" && collegeOpen) {
-              event.preventDefault();
-              if (recommendedColleges[0]) chooseCollege(recommendedColleges[0]);
-              else chooseCollege(collegeNotListed);
-            }
-          }} placeholder="Search colleges or universities" role="combobox" required
-          value={college === collegeNotListed ? collegeNotListedLabel : college} />
-        {collegeOpen && college !== collegeNotListed && (
-          <div className="college-suggestions" id="signup-college-options" role="listbox">
-            {recommendedColleges.map((collegeName) => (
-              <button aria-selected={college === collegeName} className="college-suggestion"
-                key={collegeName} onMouseDown={(event) => event.preventDefault()}
-                onClick={() => chooseCollege(collegeName)} role="option" type="button">
-                {collegeName}
-              </button>
-            ))}
-            <button aria-selected={college === collegeNotListed} className="college-suggestion college-not-listed"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => chooseCollege(collegeNotListed)} role="option" type="button">
-              {collegeNotListedLabel}
+      <div className="field">
+        <label htmlFor="su-phone">Mobile number</label>
+        <div className="control with-prefix">
+          <span aria-hidden="true" className="prefix">+91</span>
+          <input aria-describedby="su-phone-err" aria-invalid={invalid("phone")} autoComplete="tel-national" className="input"
+            id="su-phone" inputMode="numeric" maxLength={11} name="phone"
+            onChange={(event) => { setPhone(event.target.value); clearError("phone"); }}
+            placeholder="98765 43210" required type="tel" value={phone} />
+        </div>
+        {errorText("phone")}
+      </div>
+
+      <div className="field">
+        <label htmlFor="su-college" id="su-college-label">College or university</label>
+        <div className="combo">
+          <input aria-activedescendant={listOpen && activeIndex >= 0
+            ? `college-opt-${activeIndex === results.length ? "other" : activeIndex}` : undefined}
+            aria-autocomplete="list" aria-controls="college-list" aria-describedby="su-college-err"
+            aria-expanded={listOpen} aria-invalid={invalid("college")} autoComplete="off" className="input"
+            id="su-college" onBlur={() => window.setTimeout(() => setListOpen(false), 120)}
+            onChange={(event) => {
+              if (selection) { setSelection(null); setLpu(""); }
+              setCollegeText(event.target.value);
+              openList(false);
+            }}
+            onClick={() => { if (!listOpen) openList(selection !== null); }}
+            onFocus={() => openList(selection !== null)} onKeyDown={handleCollegeKey}
+            placeholder="Select or type to search" role="combobox" spellCheck={false} type="text" value={collegeText} />
+          {collegeText ? (
+            <button aria-label="Clear college" className="combo-clear" onClick={clearCollege} type="button">
+              <svg aria-hidden="true" viewBox="0 0 14 14"><path d="M2 2l10 10M12 2 2 12" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>
             </button>
+          ) : (
+            <svg aria-hidden="true" className={listOpen ? "combo-chevron up" : "combo-chevron"} viewBox="0 0 16 16">
+              <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+            </svg>
+          )}
+          {listOpen && (
+            <ul aria-labelledby="su-college-label" className="listbox" id="college-list" ref={listRef} role="listbox"
+              onMouseDown={(event) => event.preventDefault()}>
+              {query ? (
+                !results.length && <li className="note" role="presentation">No NIRF-ranked match for &quot;{query}&quot;.</li>
+              ) : (
+                <li className="count" role="presentation">{collegesAToZ.length} NIRF-ranked colleges and universities, A to Z</li>
+              )}
+              {results.map((college, index) => (
+                <li aria-selected={activeIndex === index} className={selection === college ? "current" : undefined}
+                  id={`college-opt-${index}`} key={college.place} onClick={() => choose(index)} role="option">
+                  <span className="n"><Highlighted query={query} text={college.name} /></span>
+                  <span className="m">{college.city}, {college.state}</span>
+                </li>
+              ))}
+              <li aria-selected={activeIndex === results.length} className="other" id="college-opt-other"
+                onClick={() => choose(results.length)} role="option">
+                <span className="n">{notListedLabel}</span>
+                <span className="m">Type its name yourself</span>
+              </li>
+            </ul>
+          )}
+        </div>
+        {errorText("college")}
+
+        {selection === "other" && (
+          <div className="field">
+            <label htmlFor="su-college-other">Your college&apos;s name</label>
+            <input aria-describedby="su-college-other-err" aria-invalid={invalid("collegeOther")} autoComplete="organization"
+              className="input" id="su-college-other" maxLength={160} name="college_other"
+              onChange={(event) => { setCollegeOther(event.target.value); clearError("collegeOther"); }}
+              placeholder="Full name and city" ref={otherRef} type="text" value={collegeOther} />
+            {errorText("collegeOther")}
           </div>
         )}
+
+        <div aria-hidden={!isLpu} className={isLpu ? "reveal open" : "reveal"}>
+          <div>
+            <div className="lpu-card">
+              <label htmlFor="su-lpu">LPU registration number</label>
+              <input aria-describedby="su-lpu-hint su-lpu-err" aria-invalid={invalid("lpu")} autoComplete="off" className="input"
+                disabled={!isLpu} id="su-lpu" inputMode="numeric" maxLength={8} name="lpu_registration_no"
+                onChange={(event) => { setLpu(event.target.value.replace(/\D/g, "").slice(0, 8)); clearError("lpu"); }}
+                placeholder="XXXXXXXX" ref={lpuRef} required={isLpu} type="text" value={lpu} />
+              <div className="hint" id="su-lpu-hint">8 digits. You&apos;ll find it on your LPU ID card and in UMS.</div>
+              {errorText("lpu")}
+            </div>
+          </div>
+        </div>
       </div>
-      {fieldError("college")}
 
-      {college === collegeNotListed && (
-        <>
-          <label className="field-label field-spaced" htmlFor="signup-custom-college">College or university name</label>
-          <input aria-invalid={Boolean(errors.customCollege)} className="text-field"
-            id="signup-custom-college" maxLength={160} name="customCollege"
-            onChange={(event) => setCustomCollege(event.target.value)} required value={customCollege} />
-          {fieldError("customCollege")}
-        </>
-      )}
+      <div className="field">
+        <label htmlFor="su-pw">Create a password</label>
+        <div className="control with-btn">
+          <input aria-describedby="su-pw-hint su-pw-err" aria-invalid={invalid("password")} autoComplete="new-password"
+            className="input" id="su-pw" maxLength={128} name="password"
+            onChange={(event) => { setPassword(event.target.value); clearError("password"); }}
+            required type={showPassword ? "text" : "password"} value={password} />
+          <button aria-controls="su-pw" aria-pressed={showPassword} className="inline-btn"
+            onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? "Hide" : "Show"}</button>
+        </div>
+        <div className="hint" id="su-pw-hint">At least 10 characters. A short phrase is easier to remember.</div>
+        {errorText("password")}
+      </div>
 
-      {isLpu && (
-        <>
-          <label className="field-label field-spaced" htmlFor="signup-lpu-number">LPU registration number</label>
-          <input aria-invalid={Boolean(errors.lpuRegistrationNumber)} className="text-field"
-            id="signup-lpu-number" inputMode="numeric" maxLength={8} name="lpuRegistrationNumber"
-            onChange={(event) => setLpuRegistrationNumber(event.target.value.replace(/\D/g, ""))}
-            required value={lpuRegistrationNumber} />
-          {fieldError("lpuRegistrationNumber")}
-        </>
-      )}
+      <div className="field">
+        <label className="check">
+          <input aria-describedby="su-terms-err" aria-invalid={invalid("terms")} checked={terms} id="su-terms" name="terms"
+            onChange={(event) => { setTerms(event.target.checked); clearError("terms"); }} type="checkbox" />
+          <span>I&apos;m 18 or older and agree to the <Link className="link" href="/terms">Terms</Link> and{" "}
+            <Link className="link" href="/privacy">Privacy Policy</Link>.</span>
+        </label>
+        {errorText("terms")}
+      </div>
 
-      <label className="field-label field-spaced" htmlFor="signup-password">Password</label>
-      <input aria-invalid={Boolean(errors.password)} autoComplete="new-password" className="text-field"
-        id="signup-password" maxLength={128} minLength={10} name="password"
-        onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
-      <span className="field-hint">Use at least 10 characters.</span>
-      {fieldError("password")}
-
-      <label className="remember-row consent-row">
-        <input aria-invalid={Boolean(errors.adultConsent)} checked={adultConsent}
-          onChange={(event) => setAdultConsent(event.target.checked)} type="checkbox" />
-        <span>I confirm that I am 18 or older and accept the terms.</span>
-      </label>
-      {fieldError("adultConsent")}
-
-      <button className="submit-button" disabled={pending} type="submit">
-        {pending ? "Creating account..." : "Create account"}<span aria-hidden="true">→</span>
+      <div aria-live="polite" className={`status ${status?.kind ?? ""}`} role="status">{status?.text ?? ""}</div>
+      <button className="primary" disabled={pending} type="submit">
+        {pending && <span aria-hidden="true" className="spinner" />}
+        <span>{pending ? "Creating account" : "Create account"}</span>
       </button>
-      <div aria-live="polite" className={isError ? "form-message form-error" : "form-message"}>
-        {message}
-      </div>
+      <p className="fine">You start with ₹1,00,000 in practice money. It can&apos;t be deposited or withdrawn.</p>
     </form>
   );
 }
