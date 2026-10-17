@@ -41,6 +41,9 @@ declare module "fastify" {
 
 const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
 const temporarySessionLifetimeMs = 12 * 60 * 60 * 1000;
+// The Android/iOS apps keep people signed in (behind their own app lock) and send the token as a Bearer header.
+const appSessionLifetimeMs = 180 * 24 * 60 * 60 * 1000;
+const isAppClient = (request: FastifyRequest) => request.headers["x-xocrisk-client"] === "app";
 const signupSchema = {
   body: {
     type: "object",
@@ -172,13 +175,13 @@ export async function registerAuthRoutes(
         const tokenHash = hashSessionToken(token, sessionSecret);
         await client.query(
           "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
-          [user.id, tokenHash, new Date(Date.now() + sessionLifetimeMs)],
+          [user.id, tokenHash, new Date(Date.now() + (isAppClient(request) ? appSessionLifetimeMs : sessionLifetimeMs))],
         );
         await client.query("COMMIT");
         return reply
           .header("Set-Cookie", sessionCookie(token, environment))
           .code(201)
-          .send({ user: publicUser(user) });
+          .send({ user: publicUser(user), ...(isAppClient(request) ? { token } : {}) });
       } catch (error) {
         await client.query("ROLLBACK");
         if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
@@ -263,13 +266,15 @@ export async function registerAuthRoutes(
         }
       }
       const rememberMe = request.body.rememberMe === true;
+      const app = isAppClient(request);
       const token = await createSession(
         pool,
         user.id,
         sessionSecret,
-        rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs,
+        app ? appSessionLifetimeMs : rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs,
       );
-      return reply.header("Set-Cookie", sessionCookie(token, environment, rememberMe)).send({ user: publicUser(user) });
+      return reply.header("Set-Cookie", sessionCookie(token, environment, rememberMe))
+        .send({ user: publicUser(user), ...(app ? { token } : {}) });
     },
   );
 
@@ -392,6 +397,34 @@ export async function registerAuthRoutes(
   app.get("/v1/auth/me", async (request, reply) => {
     if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
     return { user: publicUser(request.authUser) };
+  });
+
+  app.put<{ Body: { fullName: string; mobile: string } }>("/v1/auth/profile", {
+    schema: {
+      body: {
+        type: "object", additionalProperties: false, required: ["fullName", "mobile"],
+        properties: { fullName: { type: "string", minLength: 1, maxLength: 80 }, mobile: { type: "string", minLength: 1, maxLength: 20 } },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
+    if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
+    const fullName = request.body.fullName.trim().replace(/\s+/g, " ");
+    const mobile = normalizeIndianMobile(request.body.mobile);
+    if (fullName.length < 2) return reply.code(400).send({ message: "Enter your full name." });
+    if (!mobile) return reply.code(400).send({ message: "Enter a valid 10-digit Indian mobile number." });
+    try {
+      const updated = await pool.query<AuthUser>(
+        "UPDATE users SET full_name = $2, mobile = $3 WHERE id = $1 RETURNING id, email, mobile, full_name, college",
+        [request.authUser.id, fullName, mobile],
+      );
+      return { user: publicUser(updated.rows[0]), message: "Profile updated." };
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+        return reply.code(409).send({ message: "That mobile number is already used by another account." });
+      }
+      throw error;
+    }
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {

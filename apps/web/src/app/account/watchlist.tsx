@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { percent, price, tone } from "./format";
+import { TradeMini } from "./trade-icons";
 import type { Quote, Side } from "./types";
 
 type List = "nifty50" | "mine" | "all";
@@ -82,8 +83,8 @@ export default function Watchlist({ quotes, nifty50, starred, selected, onToggle
               <span className={`xt-wl-price ${tone(quote.change)}`}>{price(quote.price)}</span>
             </button>
             <span className="xt-wl-actions">
-              <button className="xt-mini buy" onClick={() => onTrade(quote.symbol, "buy")} title={`Buy ${quote.symbol}`} type="button">B</button>
-              <button className="xt-mini sell" onClick={() => onTrade(quote.symbol, "sell")} title={`Sell ${quote.symbol}`} type="button">S</button>
+              <TradeMini onClick={() => onTrade(quote.symbol, "buy")} side="buy" title={`Buy ${quote.symbol}`} />
+              <TradeMini onClick={() => onTrade(quote.symbol, "sell")} side="sell" title={`Sell ${quote.symbol}`} />
               <button aria-pressed={starredSet.has(quote.symbol)} className="xt-mini star" onClick={() => onToggleStar(quote.symbol)}
                 title={starredSet.has(quote.symbol) ? "Remove from My list" : "Add to My list"} type="button">
                 {starredSet.has(quote.symbol) ? "★" : "☆"}

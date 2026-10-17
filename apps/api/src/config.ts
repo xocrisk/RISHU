@@ -12,8 +12,19 @@ export type ApiConfig = {
   googleOAuth?: OAuthProviderConfig;
   microsoftOAuth?: OAuthProviderConfig & { tenantId: string };
   smtp?: SmtpConfig;
+  razorpay?: RazorpayConfig;
   webRoot?: string;
 };
+
+export type RazorpayConfig = { keyId: string; keySecret: string };
+
+function optionalRazorpay(): RazorpayConfig | undefined {
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  if (!keyId && !keySecret) return undefined;
+  if (!keyId || !keySecret) throw new Error("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured together");
+  return { keyId, keySecret };
+}
 
 export type OAuthProviderConfig = {
   clientId: string;
@@ -97,6 +108,7 @@ export function loadConfig(): ApiConfig {
       return provider ? { ...provider, tenantId: process.env.MICROSOFT_TENANT_ID?.trim() || "common" } : undefined;
     })(),
     smtp: optionalSmtp(),
+    razorpay: optionalRazorpay(),
     webRoot: resolveWebRoot(),
   };
 }

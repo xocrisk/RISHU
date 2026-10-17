@@ -5,6 +5,7 @@ import { useAuthApi } from "../../lib/auth-session";
 import { count, istDateTime, istDayFullYear, money, num, percent, price, rupeesShort, shortNumber, signed, tone } from "./format";
 import type { Chart, Dashboard, Holding, Order, Quote, Side } from "./types";
 import { Change, Empty, HoldingsView, LeaderboardView, PositionsView, StockView, type Trade } from "./views";
+import { SideIcon } from "./trade-icons";
 import Watchlist from "./watchlist";
 
 /* ------------------------------------------------------------------ shared bits */
@@ -190,8 +191,8 @@ export function DashboardView({ data, nifty50, holdings, onOpen, onTrade }: {
                     <td className="r hide-sm xq-muted">{quote.volume ? shortNumber(quote.volume) : "—"}</td>
                     <td className="r">
                       <span className="xq-row-actions">
-                        <button className="xq-chip buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button">Buy</button>
-                        <button className="xq-chip sell" onClick={() => onTrade({ symbol: quote.symbol, side: "sell", quantity: holdings.get(quote.symbol)?.quantity })} type="button">Sell</button>
+                        <button className="xq-chip buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button"><SideIcon side="buy" size={12} />Buy</button>
+                        <button className="xq-chip sell" onClick={() => onTrade({ symbol: quote.symbol, side: "sell", quantity: holdings.get(quote.symbol)?.quantity })} type="button"><SideIcon side="sell" size={12} />Sell</button>
                       </span>
                     </td>
                   </tr>
@@ -347,7 +348,7 @@ export function AnalyticsView({ data, quotes }: { data: Dashboard; quotes: Map<s
 
   return (
     <div className="xq-page">
-      <div className="xq-page-head"><h1>Analytics <span className="xq-badge">Beta</span></h1><span className="xq-muted">How your practice portfolio is built and performing</span></div>
+      <div className="xq-page-head"><h1>Analytics</h1><span className="xq-muted">How your practice portfolio is built and performing</span></div>
       <div className="xq-stat-grid">
         <div><span>Overall return</span><strong className={tone(overall)}>{percent((overall / rules.initialCash) * 100)}</strong><small>{signed(overall)} since start</small></div>
         <div><span>Realised P&amp;L</span><strong className={tone(portfolio.realizedPnl)}>{signed(portfolio.realizedPnl)}</strong><small>From shares you sold</small></div>
@@ -414,7 +415,7 @@ export function TrendsView({ data, onOpen, onTrade }: { data: Dashboard; onOpen:
               <StockIcon symbol={quote.symbol} size={30} /><b>{quote.symbol}</b><small>₹{price(quote.price)}</small>
             </button>
             {metric(quote)}
-            <button className="xq-chip buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button">Buy</button>
+            <button className="xq-chip buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button"><SideIcon side="buy" size={12} />Buy</button>
           </li>
         ))}
       </ul>

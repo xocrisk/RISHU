@@ -27,7 +27,9 @@
     "ios": "cap sync ios && cap open ios"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "8.0.2",
     "@capacitor/android": "^6.2.1",
+    "@capacitor/app": "6.0.3",
     "@capacitor/core": "^6.2.1",
     "@capacitor/ios": "^6.2.1"
   },

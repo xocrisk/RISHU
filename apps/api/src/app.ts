@@ -42,10 +42,12 @@ export async function buildApp(dependencies: AppDependencies) {
     request.log.error("Request failed.");
     return reply.code(500).send({ message: "The request could not be completed." });
   });
-  const allowedOrigins = dependencies.config.webOrigin
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const allowedOrigins = [...new Set([
+    ...dependencies.config.webOrigin.split(",").map((origin) => origin.trim()).filter(Boolean),
+    // The Android and iOS apps serve the web build from these origins.
+    "https://localhost",
+    "capacitor://localhost",
+  ])];
   // @fastify/cors only allows GET, HEAD and POST by default; cancelling orders and settings use DELETE and PUT.
   await app.register(cors, { origin: allowedOrigins, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
@@ -60,7 +62,7 @@ export async function buildApp(dependencies: AppDependencies) {
   const market = dependencies.market ?? new MarketFeed(dependencies.pool);
   await registerPracticeRoutes(app, dependencies.pool, market);
   await registerMarketRoutes(app);
-  await registerCommunityRoutes(app, dependencies.pool, market);
+  await registerCommunityRoutes(app, dependencies.pool, market, dependencies.config.razorpay);
   if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }

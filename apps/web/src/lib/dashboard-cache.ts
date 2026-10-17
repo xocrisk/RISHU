@@ -1,4 +1,4 @@
-import { authApiOrigin } from "./auth-session";
+import { apiFetch } from "./auth-session";
 
 // Lets the login and signup forms start loading the dashboard the moment the session exists,
 // so /account can render as soon as it mounts instead of starting the request from scratch.
@@ -11,7 +11,7 @@ export function prefetchDashboard(email: string | null): void {
   if (snapshot && (!email || snapshot.user?.email?.toLowerCase() !== email.toLowerCase())) {
     try { sessionStorage.removeItem(snapshotKey); } catch { /* storage blocked */ }
   }
-  prefetched = { at: Date.now(), response: fetch(`${authApiOrigin}/v1/practice/dashboard`, { credentials: "include" }) };
+  prefetched = { at: Date.now(), response: apiFetch("/v1/practice/dashboard") };
 }
 
 /** The prefetched dashboard response, if one was started in the last 30 seconds. Can be taken once. */

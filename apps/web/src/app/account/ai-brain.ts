@@ -325,7 +325,7 @@ const intents: Intent[] = [
 
   // ---- app features
   { patterns: [/championship|competition|contest|\blpu\b|lovely professional/],
-    answer: "The LPU Trading Championship is conducted by Lovely Professional University. Open Championship in the sidebar and press Join. Your return is measured from your account value when you join, and the highest return when it ends wins." },
+    answer: "The LPU Trading Championship is conducted by Lovely Professional University. Open Championship (Contest on the phone) and press \"Pay ₹99 & join\": the one-time entry fee is paid securely through Razorpay (UPI, cards, net banking). Trading itself uses practice money. Your return is measured from your account value when you join, and the highest return when it ends wins." },
   { patterns: [/community|chat|talk to (other|people)|connect/],
     answer: "Community is a chat room for all XOCRISK traders. Only your name and UID are shown. Be respectful and don't share personal details." },
   { patterns: [/note/], answer: "Notes is your private notebook. Write down why you bought a stock and when you'd exit. Notes save automatically and only you can see them." },

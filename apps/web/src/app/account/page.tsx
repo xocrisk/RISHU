@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAuthApi } from "../../lib/auth-session";
+import { clearAppLock } from "../../lib/app-lock";
+import { setAppToken, useAuthApi } from "../../lib/auth-session";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
 import { istDateTime, istDayFullYear, istTimeSeconds, percent, price, tone } from "./format";
+import LockScreen from "./lock-screen";
 import OrderWindow, { type OrderRequest } from "./order-window";
+import { EditProfile, ProfileView } from "./profile";
 import { AnalyticsView, DashboardView, InsightsView, PortfolioView, SettingsView, StockIcon, SupportView, TradeView, TrendsView } from "./pages";
 import type { Dashboard, OrderTicket, Side, Tab } from "./types";
 import { FundsView, OrdersView } from "./views";
@@ -32,7 +35,7 @@ const navSections: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Others", items: [
     { id: "insights", label: "Insights", icon: "M3 3h14v11H3zM6 11l3-3 2 2 3-4M7 17h6" },
-    { id: "analytics", label: "Analytics", icon: "M4 17V9M10 17V3M16 17v-6", badge: "Beta" },
+    { id: "analytics", label: "Analytics", icon: "M4 17V9M10 17V3M16 17v-6" },
     { id: "trends", label: "Market Trends", icon: "M3 15l4-5 3 3 7-8M3 17h14" },
   ] },
   { title: "Community", items: [
@@ -40,16 +43,27 @@ const navSections: { title: string; items: NavItem[] }[] = [
     { id: "community", label: "Community", icon: "M3 4h14v9H8l-4 3v-3H3zM6 8h8M6 10.5h5" },
   ] },
   { title: "Tools", items: [
-    { id: "ai", label: "XOCRISK AI", icon: "M10 2l1.8 4.7L16.5 8.5l-4.7 1.8L10 15l-1.8-4.7L3.5 8.5l4.7-1.8zM15.5 13l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z", badge: "AI" },
+    { id: "ai", label: "XOCRISK AI", icon: "M10 2l1.8 4.7L16.5 8.5l-4.7 1.8L10 15l-1.8-4.7L3.5 8.5l4.7-1.8zM15.5 13l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" },
     { id: "notes", label: "Notes", icon: "M5 2h7l4 4v12H5zM12 2v4h4M8 10h5M8 13h5" },
   ] },
   { title: "Help", items: [
+    { id: "profile", label: "Profile", icon: "M10 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3.5 17.5c.8-3 3.4-5 6.5-5s5.7 2 6.5 5" },
     { id: "support", label: "Support", icon: "M10 17a7 7 0 100-14 7 7 0 000 14zM8 8a2 2 0 114 0c0 1.5-2 1.5-2 3M10 14h.01" },
     { id: "settings", label: "Settings", icon: "M10 13a3 3 0 100-6 3 3 0 000 6zM10 1v3M10 16v3M1 10h3M16 10h3M3.6 3.6l2.1 2.1M14.3 14.3l2.1 2.1M3.6 16.4l2.1-2.1M14.3 5.7l2.1-2.1" },
   ] },
 ];
 const allItems = navSections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })));
 const tabIds = new Set<Tab>(allItems.map((item) => item.id));
+const iconOf = (id: Tab) => allItems.find((item) => item.id === id)!.icon;
+// Phone layout: a broker-style bottom bar for the five places people use most; everything else is in Profile.
+const bottomTabs: { id: Tab; label: string }[] = [
+  { id: "watchlist", label: "Watchlist" },
+  { id: "transactions", label: "Orders" },
+  { id: "portfolio", label: "Portfolio" },
+  { id: "championship", label: "Contest" },
+  { id: "profile", label: "Profile" },
+];
+const privacyKey = "xocrisk.privacy";
 
 type Toast = { id: number; kind: "ok" | "error"; text: string };
 
@@ -100,6 +114,24 @@ export default function AccountPage() {
   const [deletionRequested, setDeletionRequested] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
+  const [privacy, setPrivacy] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  // Bumping this remounts the current page so it refetches its own data (championship, chat, notes…).
+  const [pageKey, setPageKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    let saved = false;
+    try { saved = localStorage.getItem(privacyKey) === "1"; } catch { /* storage blocked */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off restore of a saved preference before paint
+    if (saved) setPrivacy(true);
+  }, []);
+
+  function changePrivacy(enabled: boolean) {
+    setPrivacy(enabled);
+    try { localStorage.setItem(privacyKey, enabled ? "1" : "0"); } catch { /* storage blocked */ }
+  }
 
   const toast = useCallback((kind: Toast["kind"], text: string) => {
     const id = ++toastId.current;
@@ -112,6 +144,7 @@ export default function AccountPage() {
     const response = await (takePrefetchedDashboard() ?? authFetch("/v1/practice/dashboard"));
     if (response.status === 401) {
       clearDashboardSnapshot();
+      setAppToken(null);
       router.replace("/login");
       return;
     }
@@ -143,6 +176,64 @@ export default function AccountPage() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [load]);
+
+  // Refresh reloads only the current page's data, never the whole app: the refresh button,
+  // F5 / Ctrl+R, and pulling down at the top of the page on a phone all come here.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    setPageKey((key) => key + 1);
+    try {
+      await load();
+    } catch {
+      setLoadError("Couldn't reach the trading service. Retrying…");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "F5" || ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "r")) {
+        event.preventDefault();
+        void refresh();
+      }
+    };
+    let startY: number | null = null;
+    let distance = 0;
+    const show = (value: number) => {
+      const indicator = pullRef.current;
+      if (!indicator) return;
+      indicator.style.transform = `translate(-50%, ${Math.min(value, 90) - 50}px) rotate(${value * 3}deg)`;
+      indicator.style.opacity = String(Math.min(1, value / 80));
+    };
+    const onStart = (event: TouchEvent) => {
+      const target = event.target as Element | null;
+      const inside = target?.closest(".xt-chart-plot, .xt-modal-backdrop, .xq-lock, .xt-wl-rows, .xq-chat-list, .xq-ai-list, .xq-notes, .xq-cards-row, .xq-table-wrap, .xt-table-wrap");
+      startY = window.scrollY <= 0 && event.touches.length === 1 && !inside ? event.touches[0].clientY : null;
+      distance = 0;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (startY === null) return;
+      distance = Math.max(0, event.touches[0].clientY - startY);
+      show(distance);
+    };
+    const onEnd = () => {
+      if (startY !== null && distance > 80) void refresh();
+      startY = null;
+      distance = 0;
+      show(0);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+  }, [refresh]);
 
   // The URL hash follows the page, so links, back and forward work.
   useEffect(() => {
@@ -239,8 +330,10 @@ export default function AccountPage() {
   async function logout() {
     setPending(true);
     try {
-      await authFetch("/v1/auth/logout", { method: "POST" });
+      await authFetch("/v1/auth/logout", { method: "POST" }).catch(() => undefined);
       clearDashboardSnapshot();
+      setAppToken(null);
+      clearAppLock();
       router.replace("/login");
     } catch {
       toast("error", "Couldn't log out. Try again.");
@@ -255,6 +348,8 @@ export default function AccountPage() {
       const response = await authFetch("/v1/auth/account", { method: "DELETE" });
       if (!response.ok) throw new Error();
       clearDashboardSnapshot();
+      setAppToken(null);
+      clearAppLock();
       setDeletionRequested(true);
     } catch {
       toast("error", "Couldn't submit the deletion request. Try again.");
@@ -300,7 +395,10 @@ export default function AccountPage() {
   const toggleStar = (symbol: string) => saveStarred(starred.includes(symbol) ? starred.filter((item) => item !== symbol) : [...starred, symbol]);
 
   return (
-    <div className={`xq ${collapsed ? "is-collapsed" : ""} ${drawer ? "drawer-open" : ""}`}>
+    <div className={`xq ${collapsed ? "is-collapsed" : ""} ${drawer ? "drawer-open" : ""} ${privacy ? "is-private" : ""}`}>
+      <div aria-hidden="true" className="xq-pull" ref={pullRef}>
+        <svg viewBox="0 0 20 20"><path d="M16 10a6 6 0 11-2-4.5M16 3v3.5h-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>
+      </div>
       <aside className="xq-sidebar">
         <div className="xq-brand-row">
           <Link aria-label="XOCRISK dashboard" className="xq-brand" href="/account">
@@ -343,6 +441,10 @@ export default function AccountPage() {
           <button aria-label="Open menu" className="xq-burger" onClick={() => setDrawer(true)} type="button">
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
           </button>
+          <button aria-label="Home" className="xq-mobile-brand" onClick={() => navigate("dashboard")} type="button">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static export, no image optimizer */}
+            <img alt="" height="30" src="/icon-192.png" width="30" />
+          </button>
           <nav aria-label="Breadcrumb" className="xq-crumbs">
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 9l7-6 7 6v8H3z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
             <span>{current.section}</span><i>/</i><b>{tab === "trade" && stockQuote ? `Trade · ${stockQuote.symbol}` : current.label}</b>
@@ -366,6 +468,10 @@ export default function AccountPage() {
               </ul>
             )}
           </div>
+          <button aria-label="Refresh this page" className={`xq-refresh ${refreshing ? "is-spinning" : ""}`} disabled={refreshing}
+            onClick={() => void refresh()} title="Refresh this page (F5)" type="button">
+            <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M16 10a6 6 0 11-2-4.5M16 3v3.5h-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>
+          </button>
           <div className={`xq-status ${status.isOpen ? "open" : ""}`}
             title={`${status.isOpen ? "Closes" : "Opens"} ${istDateTime.format(new Date(status.nextChangeAt))} IST · prices delayed ~10 min${fetchedAt ? ` · refreshed ${istTimeSeconds.format(fetchedAt)}` : ""}`}>
             <i />{status.isOpen ? "Market open" : "Market closed"}
@@ -390,7 +496,7 @@ export default function AccountPage() {
           </div>
         )}
 
-        <main className="xq-main">
+        <main className="xq-main" key={pageKey}>
           {tab === "dashboard" && <DashboardView data={data} holdings={holdings} nifty50={nifty50} onOpen={openStock} onTrade={trade} />}
           {tab === "portfolio" && <PortfolioView data={data} onOpen={openStock} onTrade={trade} quotes={quotes} />}
           {tab === "wallet" && <div className="xq-page"><FundsView data={data} onReset={() => void resetPortfolio()} pending={pending} /></div>}
@@ -418,6 +524,10 @@ export default function AccountPage() {
           {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
           {tab === "notes" && <NotesView notify={toast} />}
           {tab === "support" && <SupportView />}
+          {tab === "profile" && (
+            <ProfileView data={data} notify={toast} onEdit={() => setEditingProfile(true)} onLogout={() => void logout()}
+              onNavigate={navigate} onPrivacy={changePrivacy} privacy={privacy} />
+          )}
           {tab === "settings" && (
             <SettingsView data={data} onClearStarred={() => saveStarred([])} onDelete={() => void requestDeletion()} onLogout={() => void logout()}
               onReset={() => void resetPortfolio()} onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} starredCount={starred.length} />
@@ -425,6 +535,16 @@ export default function AccountPage() {
           <p className="xq-footnote">XOCRISK · practice trading with virtual money · NSE prices delayed ~10 minutes · not investment advice</p>
         </main>
       </div>
+
+      <nav aria-label="Main" className="xq-bottom-nav">
+        {bottomTabs.map((item) => (
+          <button aria-current={tab === item.id ? "page" : undefined} key={item.id} onClick={() => navigate(item.id)} type="button">
+            <NavIcon path={iconOf(item.id)} />
+            <span>{item.id === "profile" ? data.user.uid || item.label : item.label}</span>
+            {badges[item.id] && <em>{badges[item.id]}</em>}
+          </button>
+        ))}
+      </nav>
 
       <div aria-live="polite" className="xq-toasts">
         {toasts.map((item) => <div className={`xq-toast ${item.kind}`} key={item.id}>{item.text}</div>)}
@@ -435,6 +555,10 @@ export default function AccountPage() {
           key={ticket.key} limitBandPercent={data.rules.limitBandPercent} market={status} onClose={closeTicket}
           onSubmit={placeOrder} pending={pending} quote={ticketQuote} ticket={ticket} />
       )}
+      {editingProfile && (
+        <EditProfile data={data} notify={toast} onClose={() => setEditingProfile(false)} onSaved={() => void load().catch(() => {})} />
+      )}
+      <LockScreen name={firstName === "Trader" ? "" : firstName} onSignOut={() => void logout()} />
     </div>
   );
 }

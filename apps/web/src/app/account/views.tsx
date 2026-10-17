@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import StockChart from "./stock-chart";
+import { SideIcon, TradeMini } from "./trade-icons";
 import { count, istDate, istOrderTime, money, num, percent, price, shortNumber, signed, tone } from "./format";
 import type { Chart, Dashboard, Holding, Order, OrderTicket, Product, Quote } from "./types";
 
@@ -32,6 +33,12 @@ export function StockView({ quote, isIndex, holding, onTrade }: { quote: Quote; 
   const range = meta && meta.symbol === quote.symbol ? meta : null;
   const dayRange = quote.high - quote.low || 1;
   const pos = Math.min(100, Math.max(0, ((quote.price - quote.low) / dayRange) * 100));
+  const actions = (
+    <>
+      <button className="xt-btn buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button"><SideIcon side="buy" size={15} />Buy</button>
+      <button className="xt-btn sell" onClick={() => onTrade({ symbol: quote.symbol, side: "sell", quantity: holding?.quantity })} type="button"><SideIcon side="sell" size={15} />Sell</button>
+    </>
+  );
   return (
     <div className="xt-view xt-stock">
       <header className="xt-stock-head">
@@ -44,15 +51,10 @@ export function StockView({ quote, isIndex, holding, onTrade }: { quote: Quote; 
           <strong>{price(quote.price)}</strong>
           <Change pct={quote.changePercent} plain value={quote.change} />
         </div>
-        {!isIndex && (
-          <div className="xt-stock-actions">
-            <button className="xt-btn buy" onClick={() => onTrade({ symbol: quote.symbol, side: "buy" })} type="button">Buy</button>
-            <button className="xt-btn sell" onClick={() => onTrade({ symbol: quote.symbol, side: "sell", quantity: holding?.quantity })} type="button">Sell</button>
-          </div>
-        )}
+        {!isIndex && <div className="xt-stock-actions">{actions}</div>}
       </header>
 
-      <section className="xt-card flush"><StockChart lastPrice={quote.price} onMeta={setMeta} symbol={quote.symbol} /></section>
+      <section className="xt-card flush"><StockChart actions={isIndex ? undefined : actions} lastPrice={quote.price} onMeta={setMeta} symbol={quote.symbol} /></section>
 
       <div className="xt-cards two">
         <section className="xt-card">
@@ -120,8 +122,40 @@ export function OrdersView({ orders, quotes, pending, onCancel, onTrade, onOpen 
           ))}
         </div>
       </div>
+      {list.length > 0 && (
+        <ul className="xt-mlist">
+          {list.map((order) => {
+            const ltp = quotes.get(order.symbol)?.price;
+            const orderPrice = num(order.fillPrice) ?? num(order.limitPrice);
+            return (
+              <li key={order.id}>
+                <div>
+                  <span className="xt-ml-top">
+                    <small><span className={`xt-tag ${order.side}`}>{order.side.toUpperCase()}</span> Qty. {count(order.quantity)} · {istOrderTime.format(new Date(order.filledAt ?? order.createdAt))}</small>
+                    <span className={`xt-status ${order.status}`}>{statusLabel[order.status]}</span>
+                  </span>
+                  <span className="xt-ml-mid">
+                    <button className="xt-cell-link" onClick={() => onOpen(order.symbol)} type="button">{order.symbol}</button>
+                    <b>{orderPrice === null ? "MKT" : price(orderPrice)}</b>
+                  </span>
+                  <span className="xt-ml-bot">
+                    <small>NSE · {order.product === "delivery" ? "CNC" : "MIS"} · {order.orderType.toUpperCase()}</small>
+                    <small>LTP {ltp === undefined ? "—" : price(ltp)}</small>
+                  </span>
+                  {order.rejectionReason && <small className="xt-reason">{order.rejectionReason}</small>}
+                  <span className="xt-ml-actions">
+                    {order.status === "open"
+                      ? <button className="xt-btn ghost small" disabled={pending} onClick={() => onCancel(order.id)} type="button">Cancel</button>
+                      : <button className="xt-btn ghost small" onClick={() => onTrade({ symbol: order.symbol, side: order.side, quantity: order.quantity, product: order.product })} type="button">Repeat</button>}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {list.length ? (
-        <div className="xt-table-wrap">
+        <div className="xt-table-wrap xt-desktop">
           <table className="xt-table">
             <thead><tr><th>Time</th><th>Type</th><th>Instrument</th><th>Product</th><th className="r">Qty.</th><th className="r">{view === "executed" ? "Avg. price" : "Price"}</th><th className="r">LTP</th><th>Status</th><th /></tr></thead>
             <tbody>
@@ -181,7 +215,26 @@ export function HoldingsView({ holdings, quotes, onTrade, onOpen }: {
             <div><span>Day&apos;s P&amp;L</span><strong><Change pct={current - dayPnl ? (dayPnl / (current - dayPnl)) * 100 : 0} value={dayPnl} /></strong></div>
             <div><span>Total P&amp;L</span><strong><Change pct={invested ? (totalPnl / invested) * 100 : 0} value={totalPnl} /></strong></div>
           </div>
-          <div className="xt-table-wrap">
+          <ul className="xt-mlist">
+            {holdings.map((holding) => {
+              const quote = quotes.get(holding.symbol);
+              const net = holding.averageCost ? ((holding.lastPrice - holding.averageCost) / holding.averageCost) * 100 : 0;
+              return (
+                <li key={holding.symbol}>
+                  <button onClick={() => onOpen(holding.symbol)} type="button">
+                    <span className="xt-ml-top"><small>Qty. {count(holding.quantity)} · Avg. {price(holding.averageCost)}</small><small className={tone(net)}>{percent(net)}</small></span>
+                    <span className="xt-ml-mid"><b>{holding.symbol}</b><b className={tone(holding.unrealizedPnl)}>{signed(holding.unrealizedPnl, price)}</b></span>
+                    <span className="xt-ml-bot">
+                      <small>Invested {price(holding.averageCost * holding.quantity)}</small>
+                      <small>LTP {price(holding.lastPrice)} {quote && <span className={tone(quote.change)}>({percent(quote.changePercent)})</span>}</small>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="xt-mday"><span>Day&apos;s P&amp;L</span><Change pct={current - dayPnl ? (dayPnl / (current - dayPnl)) * 100 : 0} value={dayPnl} /></div>
+          <div className="xt-table-wrap xt-desktop">
             <table className="xt-table">
               <thead><tr><th>Instrument</th><th className="r">Qty.</th><th className="r">Avg. cost</th><th className="r">LTP</th><th className="r">Cur. val</th><th className="r">P&amp;L</th><th className="r">Net chg.</th><th className="r">Day chg.</th><th /></tr></thead>
               <tbody>
@@ -199,8 +252,8 @@ export function HoldingsView({ holdings, quotes, onTrade, onOpen }: {
                       <td className={`r ${tone(net)}`}>{percent(net)}</td>
                       <td className={`r ${tone(quote?.changePercent ?? 0)}`}>{quote ? percent(quote.changePercent) : "—"}</td>
                       <td className="r xt-row-actions">
-                        <button className="xt-mini buy" onClick={() => onTrade({ symbol: holding.symbol, side: "buy" })} title="Add more" type="button">B</button>
-                        <button className="xt-mini sell" onClick={() => onTrade({ symbol: holding.symbol, side: "sell", quantity: holding.quantity })} title="Exit" type="button">S</button>
+                        <TradeMini onClick={() => onTrade({ symbol: holding.symbol, side: "buy" })} side="buy" title="Add more" />
+                        <TradeMini onClick={() => onTrade({ symbol: holding.symbol, side: "sell", quantity: holding.quantity })} side="sell" title="Exit" />
                       </td>
                     </tr>
                   );

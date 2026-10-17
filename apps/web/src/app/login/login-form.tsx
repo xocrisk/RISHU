@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
-import { authApiOrigin, createAuthSession } from "../../lib/auth-session";
+import { apiFetch, authApiOrigin, createAuthSession, isNativeApp } from "../../lib/auth-session";
 import { prefetchDashboard } from "../../lib/dashboard-cache";
 
 type Mode = "login" | "request-reset" | "verify-reset";
@@ -24,10 +24,9 @@ function subscribeToLocation(callback: () => void) {
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<{ message?: string }> {
-  const response = await fetch(`${authApiOrigin}${path}`, {
+  const response = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "include",
     body: JSON.stringify(body),
   });
   const result = await response.json().catch(() => ({})) as { message?: string };
@@ -84,11 +83,16 @@ export default function LoginForm() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${authApiOrigin}/v1/auth/me`, { credentials: "include" })
-      .then((response) => { if (!cancelled && response.ok) setLoggedIn(true); })
+    apiFetch("/v1/auth/me")
+      .then((response) => {
+        if (cancelled || !response.ok) return;
+        // The app stays signed in on this device (its app lock protects it), so skip the login form.
+        if (isNativeApp()) router.replace("/account");
+        else setLoggedIn(true);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [router]);
 
   function switchMode(next: Mode) {
     setMode(next);

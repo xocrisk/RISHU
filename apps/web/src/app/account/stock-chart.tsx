@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import {
+  ColorType, CrosshairMode, LineStyle, createChart,
+  type IChartApi, type ISeriesApi, type MouseEventParams, type SeriesType, type Time, type UTCTimestamp,
+} from "lightweight-charts";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuthApi } from "../../lib/auth-session";
 import { count, istDay, istDayYear, istOrderTime, istTime, price, shortNumber } from "./format";
 import type { Candle, Chart, ChartRange } from "./types";
 
 const rangeList: ChartRange[] = ["1D", "1W", "1M", "6M", "1Y", "5Y"];
-const height = 300;
-const padTop = 14;
-const padBottom = 14;
-const padLeft = 8;
-/** Room on the right for the price labels. */
-const gutter = 70;
+type Style = "candles" | "area" | "line";
+// lightweight-charts draws times in UTC; shifting by IST's offset makes the axis read in Indian time.
+const istOffsetSeconds = 5.5 * 3600;
+const toChartTime = (ms: number) => (Math.floor(ms / 1000) + istOffsetSeconds) as UTCTimestamp;
+const fromChartTime = (time: Time) => ((time as number) - istOffsetSeconds) * 1000;
 
 function timeLabel(time: number, range: ChartRange) {
   if (range === "1D") return istTime.format(time);
@@ -20,34 +23,39 @@ function timeLabel(time: number, range: ChartRange) {
   return istDay.format(time);
 }
 
+function palette(element: HTMLElement) {
+  const css = getComputedStyle(element);
+  const read = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  return {
+    background: read("--panel", "#ffffff"), text: read("--muted", "#667085"), line: read("--line", "#e7e9ee"),
+    up: read("--up", "#12a150"), down: read("--down", "#e5383b"), gold: read("--gold", "#b8862f"), faint: read("--faint", "#98a2b3"),
+  };
+}
+
 type Props = {
   symbol: string;
   /** Latest delayed price; drawn as the final point so the chart agrees with the quote. */
   lastPrice: number;
   onMeta?: (chart: Chart) => void;
+  /** Buttons shown in the full-screen view (Buy / Sell). */
+  actions?: ReactNode;
 };
 
-export default function StockChart({ symbol, lastPrice, onMeta }: Props) {
+export default function StockChart({ symbol, lastPrice, onMeta, actions }: Props) {
   const authFetch = useAuthApi();
   const [range, setRange] = useState<ChartRange>("1D");
-  const [mode, setMode] = useState<"area" | "candles">("area");
+  const [style, setStyle] = useState<Style>("candles");
   const [chart, setChart] = useState<Chart | null>(null);
   const [failed, setFailed] = useState(false);
-  const [hover, setHover] = useState<number | null>(null);
-  const [width, setWidth] = useState(800);
-  const box = useRef<HTMLDivElement>(null);
-  const requestKey = `${symbol}|${range}`;
+  const [hover, setHover] = useState<Candle | null>(null);
+  const [full, setFull] = useState(false);
   const [loadedKey, setLoadedKey] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  const api = useRef<{ chart: IChartApi; main: ISeriesApi<SeriesType>; volume: ISeriesApi<"Histogram"> } | null>(null);
+  const candlesRef = useRef<Candle[]>([]);
   const onMetaRef = useRef(onMeta);
   useEffect(() => { onMetaRef.current = onMeta; }, [onMeta]);
-
-  useEffect(() => {
-    const element = box.current;
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(240, entry.contentRect.width)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+  const loading = loadedKey !== `${symbol}|${range}`;
 
   useEffect(() => {
     let active = true;
@@ -71,11 +79,12 @@ export default function StockChart({ symbol, lastPrice, onMeta }: Props) {
     return () => { active = false; };
   }, [authFetch, symbol, range]);
 
-  const loading = loadedKey !== requestKey;
   const candles = useMemo<Candle[]>(() => {
     if (!chart || chart.symbol !== symbol) return [];
-    const list = chart.candles.slice();
-    // Keep the last point in step with the latest quote for the intraday view.
+    // The chart needs strictly increasing times.
+    const byTime = new Map<number, Candle>();
+    for (const candle of chart.candles) byTime.set(toChartTime(candle.time), candle);
+    const list = [...byTime.values()].sort((a, b) => a.time - b.time);
     if (range === "1D" && list.length && Math.abs(list[list.length - 1].close - lastPrice) > 0.001) {
       const last = list[list.length - 1];
       list[list.length - 1] = { ...last, close: lastPrice, high: Math.max(last.high, lastPrice), low: Math.min(last.low, lastPrice) };
@@ -83,125 +92,154 @@ export default function StockChart({ symbol, lastPrice, onMeta }: Props) {
     return list;
   }, [chart, symbol, range, lastPrice]);
 
-  const baseline = range === "1D" && chart?.previousClose ? chart.previousClose : candles[0]?.open ?? 0;
-  const lows = candles.map((candle) => (mode === "candles" ? candle.low : candle.close));
-  const highs = candles.map((candle) => (mode === "candles" ? candle.high : candle.close));
-  const min = Math.min(...lows, range === "1D" && baseline ? baseline : Infinity);
-  const max = Math.max(...highs, range === "1D" && baseline ? baseline : -Infinity);
-  const span = max - min || 1;
-  const y = (value: number) => padTop + (1 - (value - min) / span) * (height - padTop - padBottom);
-  const plotWidth = Math.max(40, width - padLeft - gutter);
-  // Candles need half a body of room at each end; lines can run edge to edge.
-  const inset = mode === "candles" ? Math.min(10, plotWidth / Math.max(candles.length, 1) / 2) : 0;
-  const step = candles.length > 1 ? (plotWidth - 2 * inset) / (candles.length - 1) : plotWidth;
-  const x = (index: number) => padLeft + inset + (candles.length > 1 ? index * step : plotWidth / 2);
-  const last = candles[candles.length - 1];
-  const up = last ? last.close >= baseline : true;
-  const color = up ? "var(--up)" : "var(--down)";
+  // One chart instance per style; data and colours are pushed into it below.
+  useEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const colors = palette(element);
+    const instance = createChart(element, {
+      autoSize: true,
+      layout: { background: { type: ColorType.Solid, color: colors.background }, textColor: colors.text, fontFamily: getComputedStyle(element).fontFamily, fontSize: 11 },
+      grid: { vertLines: { color: colors.line }, horzLines: { color: colors.line } },
+      rightPriceScale: { borderColor: colors.line, scaleMargins: { top: 0.1, bottom: 0.22 } },
+      timeScale: { borderColor: colors.line, timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      crosshair: { mode: CrosshairMode.Normal },
+      localization: { priceFormatter: (value: number) => price(value) },
+    });
+    const main: ISeriesApi<SeriesType> = style === "candles"
+      ? instance.addCandlestickSeries({ upColor: colors.up, downColor: colors.down, wickUpColor: colors.up, wickDownColor: colors.down, borderVisible: false })
+      : style === "area"
+        ? instance.addAreaSeries({ lineColor: colors.gold, topColor: `${colors.gold}55`, bottomColor: `${colors.gold}05`, lineWidth: 2 })
+        : instance.addLineSeries({ color: colors.gold, lineWidth: 2 });
+    const volume = instance.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "volume", lastValueVisible: false, priceLineVisible: false });
+    instance.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    api.current = { chart: instance, main, volume };
 
-  const linePath = candles.map((candle, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(candle.close).toFixed(1)}`).join(" ");
-  const areaPath = candles.length ? `${linePath} L${x(candles.length - 1).toFixed(1)},${height} L${x(0).toFixed(1)},${height} Z` : "";
-  const bodyWidth = Math.max(1, Math.min(14, (plotWidth / Math.max(candles.length, 1)) * 0.62));
-  const gridLevels = [0, 0.25, 0.5, 0.75, 1].map((fraction) => max - span * fraction);
-  const xTicks = candles.length > 4 ? [0, Math.floor(candles.length / 3), Math.floor((2 * candles.length) / 3), candles.length - 1] : [];
+    const onMove = (param: MouseEventParams) => {
+      if (!param.time) { setHover(null); return; }
+      const ms = fromChartTime(param.time);
+      setHover((current) => (current?.time === ms ? current : candlesRef.current.find((candle) => candle.time === ms) ?? null));
+    };
+    instance.subscribeCrosshairMove(onMove);
 
-  const active = hover !== null ? candles[hover] : undefined;
-  const shown = active ?? last;
+    // Re-colour when the user switches light/dark.
+    const observer = new MutationObserver(() => {
+      const next = palette(element);
+      instance.applyOptions({
+        layout: { background: { type: ColorType.Solid, color: next.background }, textColor: next.text },
+        grid: { vertLines: { color: next.line }, horzLines: { color: next.line } },
+        rightPriceScale: { borderColor: next.line }, timeScale: { borderColor: next.line },
+      });
+      if (style === "candles") main.applyOptions({ upColor: next.up, downColor: next.down, wickUpColor: next.up, wickDownColor: next.down });
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      observer.disconnect();
+      instance.unsubscribeCrosshairMove(onMove);
+      instance.remove();
+      api.current = null;
+    };
+  }, [style]);
 
-  function track(event: PointerEvent<HTMLDivElement>) {
-    if (!candles.length || !box.current) return;
-    const left = box.current.getBoundingClientRect().left;
-    const index = Math.round((event.clientX - left - padLeft - inset) / (candles.length > 1 ? step : 1));
-    setHover(Math.max(0, Math.min(candles.length - 1, index)));
+  useEffect(() => {
+    candlesRef.current = candles;
+    const current = api.current;
+    const element = box.current;
+    if (!current || !element) return;
+    const colors = palette(element);
+    current.main.setData(candles.map((candle) => (style === "candles"
+      ? { time: toChartTime(candle.time), open: candle.open, high: candle.high, low: candle.low, close: candle.close }
+      : { time: toChartTime(candle.time), value: candle.close })));
+    current.volume.setData(candles.map((candle) => ({
+      time: toChartTime(candle.time), value: candle.volume,
+      color: `${candle.close >= candle.open ? colors.up : colors.down}55`,
+    })));
+    const previous = range === "1D" ? chart?.previousClose : null;
+    const line = previous ? current.main.createPriceLine({ price: previous, color: colors.faint, lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: "Prev close" }) : null;
+    current.chart.timeScale().fitContent();
+    // Skip if the chart itself was already removed (unmount or style change); touching it would repaint a disposed canvas.
+    return () => { if (line && api.current === current) current.main.removePriceLine(line); };
+  }, [candles, style, range, chart]);
+
+  // Esc leaves full screen; the page behind doesn't scroll while it's open.
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setFull(false); };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [full]);
+
+  function zoom(factor: number) {
+    const timeScale = api.current?.chart.timeScale();
+    const visible = timeScale?.getVisibleLogicalRange();
+    if (!timeScale || !visible) return;
+    const center = (visible.from + visible.to) / 2;
+    const half = Math.max(3, ((visible.to - visible.from) * factor) / 2);
+    timeScale.setVisibleLogicalRange({ from: center - half, to: center + half });
   }
 
+  const shown = hover ?? candles[candles.length - 1];
   return (
-    <div className="xt-chart">
+    <div className={`xt-chart ${full ? "is-full" : ""}`}>
       <div className="xt-chart-bar">
-        <div className="xt-chart-legend">
-          {shown ? (
-            <>
-              <span>{active ? timeLabel(active.time, range) : "Last"}</span>
-              <span>O <b>{price(shown.open)}</b></span><span>H <b>{price(shown.high)}</b></span>
-              <span>L <b>{price(shown.low)}</b></span><span>C <b className={shown.close >= shown.open ? "up" : "down"}>{price(shown.close)}</b></span>
-              {shown.volume > 0 && <span>Vol <b>{shortNumber(shown.volume)}</b></span>}
-            </>
-          ) : <span>&nbsp;</span>}
+        {full && <strong className="xt-chart-title">{symbol} <small>NSE · {range}</small></strong>}
+        <div className="xt-seg" role="group" aria-label="Chart range">
+          {rangeList.map((item) => (
+            <button aria-pressed={range === item} key={item} onClick={() => { setRange(item); setHover(null); }} type="button">{item}</button>
+          ))}
         </div>
         <div className="xt-chart-controls">
-          <div className="xt-seg" role="group" aria-label="Chart range">
-            {rangeList.map((item) => (
-              <button aria-pressed={range === item} key={item} onClick={() => { setRange(item); setHover(null); }} type="button">{item}</button>
-            ))}
-          </div>
           <div className="xt-seg" role="group" aria-label="Chart style">
-            <button aria-pressed={mode === "area"} onClick={() => setMode("area")} title="Line" type="button">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 12l4-5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-            </button>
-            <button aria-pressed={mode === "candles"} onClick={() => setMode("candles")} title="Candles" type="button">
+            <button aria-pressed={style === "candles"} onClick={() => setStyle("candles")} title="Candles" type="button">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2v12M12 2v12" stroke="currentColor" strokeWidth="1.2" /><rect x="2.5" y="5" width="3" height="6" fill="currentColor" /><rect x="10.5" y="4" width="3" height="5" fill="none" stroke="currentColor" /></svg>
             </button>
+            <button aria-pressed={style === "area"} onClick={() => setStyle("area")} title="Area" type="button">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 12l4-5 3 3 6-7v11H1z" fill="currentColor" opacity=".25" /><path d="M1 12l4-5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+            </button>
+            <button aria-pressed={style === "line"} onClick={() => setStyle("line")} title="Line" type="button">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 12l4-5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+            </button>
           </div>
+          <div className="xt-seg" role="group" aria-label="Zoom">
+            <button onClick={() => zoom(0.6)} title="Zoom in" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M10.5 10.5L14 14M5 7h4M7 5v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
+            <button onClick={() => zoom(1.6)} title="Zoom out" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M10.5 10.5L14 14M5 7h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg></button>
+            <button onClick={() => api.current?.chart.timeScale().fitContent()} title="Fit all" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12M2 8l3-3M2 8l3 3M14 8l-3-3M14 8l-3 3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+          </div>
+          <button aria-label={full ? "Exit full screen" : "Open full-screen chart"} className="xt-chart-expand" onClick={() => setFull((value) => !value)} title={full ? "Exit full screen (Esc)" : "Full-screen chart"} type="button">
+            {full
+              ? <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              : <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          </button>
         </div>
       </div>
 
-      <div aria-label={`${symbol} price chart, ${range}`} className="xt-chart-plot" onPointerLeave={() => setHover(null)}
-        onPointerMove={track} ref={box} role="img">
-        {candles.length > 0 && (
-          <svg height={height} viewBox={`0 0 ${width} ${height}`} width={width}>
-            <defs>
-              <linearGradient id={`fill-${up ? "up" : "down"}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-                <stop offset="100%" stopColor={color} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {gridLevels.map((level) => <line className="xt-grid" key={level} x1="0" x2={width - gutter + 6} y1={y(level)} y2={y(level)} />)}
-            {range === "1D" && chart?.previousClose && (
-              <line className="xt-baseline" x1="0" x2={width - gutter + 6} y1={y(chart.previousClose)} y2={y(chart.previousClose)} />
-            )}
-            {mode === "area" ? (
-              <>
-                <path d={areaPath} fill={`url(#fill-${up ? "up" : "down"})`} />
-                <path d={linePath} fill="none" stroke={color} strokeLinejoin="round" strokeWidth="1.8" />
-              </>
-            ) : candles.map((candle, index) => {
-              const rising = candle.close >= candle.open;
-              const top = y(Math.max(candle.open, candle.close));
-              return (
-                <g className={rising ? "xt-candle up" : "xt-candle down"} key={candle.time}>
-                  <line x1={x(index)} x2={x(index)} y1={y(candle.high)} y2={y(candle.low)} />
-                  <rect height={Math.max(1, y(Math.min(candle.open, candle.close)) - top)} width={bodyWidth} x={x(index) - bodyWidth / 2} y={top} />
-                </g>
-              );
-            })}
-            {active && hover !== null && (
-              <g className="xt-crosshair">
-                <line x1={x(hover)} x2={x(hover)} y1="0" y2={height} />
-                <line x1="0" x2={width - gutter + 6} y1={y(active.close)} y2={y(active.close)} />
-                <circle cx={x(hover)} cy={y(active.close)} fill={color} r="3.5" />
-              </g>
-            )}
-          </svg>
-        )}
-        {candles.length > 0 && (
-          <div aria-hidden="true" className="xt-axis-y">
-            {gridLevels.map((level) => <span key={level} style={{ top: y(level) }}>{price(level)}</span>)}
-          </div>
-        )}
+      <div className="xt-chart-legend">
+        {shown ? (
+          <>
+            <span>{hover ? timeLabel(hover.time, range) : "Last"}</span>
+            <span>O <b>{price(shown.open)}</b></span><span>H <b>{price(shown.high)}</b></span>
+            <span>L <b>{price(shown.low)}</b></span><span>C <b className={shown.close >= shown.open ? "up" : "down"}>{price(shown.close)}</b></span>
+            {shown.volume > 0 && <span>Vol <b>{shortNumber(shown.volume)}</b></span>}
+          </>
+        ) : <span>&nbsp;</span>}
+      </div>
+
+      <div aria-label={`${symbol} price chart, ${range}. Drag to move, scroll or pinch to zoom.`} className="xt-chart-plot" role="img">
+        <div className="xt-chart-canvas" ref={box} />
         {(loading || failed || candles.length === 0) && (
           <div className="xt-chart-state">
             {loading ? <span className="xt-spinner" aria-label="Loading chart" /> : failed ? "Chart data is unavailable right now." : "No trades in this range yet."}
           </div>
         )}
       </div>
-      <div aria-hidden="true" className="xt-axis-x" style={{ paddingRight: gutter }}>
-        {xTicks.map((index) => <span key={index}>{timeLabel(candles[index].time, range)}</span>)}
-      </div>
-      {candles.length > 0 && (
+      <div className="xt-chart-foot">
         <p className="xt-chart-note">
-          {count(candles.length)} {range === "1D" ? "5-minute" : range === "1W" ? "15-minute" : range === "5Y" ? "weekly" : "daily"} bars · NSE · delayed
+          {candles.length > 0 && <>{count(candles.length)} {range === "1D" ? "5-minute" : range === "1W" ? "15-minute" : range === "5Y" ? "weekly" : "daily"} bars · </>}
+          Drag to move · scroll or pinch to zoom · NSE, delayed
         </p>
-      )}
+        {full && actions && <div className="xt-chart-actions">{actions}</div>}
+      </div>
     </div>
   );
 }

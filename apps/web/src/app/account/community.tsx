@@ -21,7 +21,31 @@ type Entry = { rank: number; displayName: string; uid: string; value: number; re
 type Championship = {
   id: string; title: string; organizer: string; description: string; startsAt: string; endsAt: string;
   status: "upcoming" | "live" | "ended"; participantCount: number; joined: boolean; you: Entry | null; leaderboard: Entry[];
+  entryFee: number; feePaid: boolean; paymentsEnabled: boolean;
 };
+
+type RazorpayOrder = {
+  keyId: string; orderId: string; amount: number; currency: string; description: string;
+  prefill: { name: string; email: string; contact: string };
+};
+type RazorpayResponse = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
+type RazorpayCheckout = new (options: Record<string, unknown>) => { open: () => void; on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void };
+
+/** Loads Razorpay's checkout script once. */
+function loadRazorpay(): Promise<RazorpayCheckout> {
+  const existing = (window as { Razorpay?: RazorpayCheckout }).Razorpay;
+  if (existing) return Promise.resolve(existing);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => {
+      const loaded = (window as { Razorpay?: RazorpayCheckout }).Razorpay;
+      if (loaded) resolve(loaded); else reject(new Error("Razorpay unavailable"));
+    };
+    script.onerror = () => reject(new Error("Razorpay unavailable"));
+    document.head.appendChild(script);
+  });
+}
 
 function countdown(target: string, now: number) {
   const ms = new Date(target).getTime() - now;
@@ -53,12 +77,48 @@ export function ChampionshipView({ notify, onChanged }: { notify: Notify; onChan
     setJoining(true);
     try {
       const response = await authFetch(`/v1/championships/${encodeURIComponent(id)}/join`, { method: "POST" });
-      const body = await response.json().catch(() => ({})) as { message?: string };
+      const body = await response.json().catch(() => ({})) as { message?: string; requiresPayment?: boolean };
+      if (body.requiresPayment) { await pay(id); return; }
       notify(response.ok ? "ok" : "error", body.message ?? (response.ok ? "Joined." : "Couldn't join right now."));
       if (response.ok) { await load(); onChanged(); }
     } finally {
       setJoining(false);
     }
+  }
+
+  // Entry fee: the API creates a Razorpay order, Razorpay's checkout takes the payment (UPI, cards, net banking),
+  // and the API verifies the signed result before adding the user to the championship.
+  async function pay(id: string) {
+    const path = `/v1/championships/${encodeURIComponent(id)}/payment`;
+    const response = await authFetch(path, { method: "POST" });
+    const order = await response.json().catch(() => ({})) as Partial<RazorpayOrder> & { message?: string };
+    if (!response.ok || !order.orderId) { notify("error", order.message ?? "The payment couldn't be started."); return; }
+    let Razorpay: RazorpayCheckout;
+    try {
+      Razorpay = await loadRazorpay();
+    } catch {
+      notify("error", "Couldn't open the payment window. Check your connection and try again.");
+      return;
+    }
+    await new Promise<void>((done) => {
+      const checkout = new Razorpay({
+        key: order.keyId, order_id: order.orderId, amount: order.amount, currency: order.currency,
+        name: "XOCRISK", description: order.description, prefill: order.prefill, theme: { color: "#b8862f" },
+        handler: async (result: RazorpayResponse) => {
+          const verify = await authFetch(`${path}/verify`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: result.razorpay_order_id, paymentId: result.razorpay_payment_id, signature: result.razorpay_signature }),
+          });
+          const body = await verify.json().catch(() => ({})) as { message?: string };
+          notify(verify.ok ? "ok" : "error", body.message ?? (verify.ok ? "Payment received. You're in!" : "The payment couldn't be verified."));
+          if (verify.ok) { await load(); onChanged(); }
+          done();
+        },
+        modal: { ondismiss: () => done() },
+      });
+      checkout.on("payment.failed", (failure) => notify("error", failure.error?.description ?? "The payment failed. No money was taken."));
+      checkout.open();
+    });
   }
 
   if (failed && !list) return <div className="xq-page"><Empty title="Couldn't load the championship"><p>Check your connection and try again.</p></Empty></div>;
@@ -78,11 +138,14 @@ export function ChampionshipView({ notify, onChanged }: { notify: Notify; onChan
             <span className={`xq-status-chip ${championship.status}`}><i />{statusLabel}</span>
             <span>{istDayFullYear.format(new Date(championship.startsAt))} – {istDayFullYear.format(new Date(championship.endsAt))}</span>
             <span>{championship.participantCount} trader{championship.participantCount === 1 ? "" : "s"} joined</span>
+            <span className="xq-fee-chip">{championship.entryFee > 0 ? `Entry ₹${championship.entryFee}` : "Free entry"}</span>
           </div>
           {championship.joined ? (
             <p className="xq-champ-in">✓ You&apos;re registered{championship.you ? ` · rank #${championship.you.rank} · ${percent(championship.you.returnPercent)}` : ""}</p>
           ) : championship.status !== "ended" ? (
-            <button className="xq-btn primary big" disabled={joining} onClick={() => void join(championship.id)} type="button">{joining ? "Joining…" : "Join the championship"}</button>
+            <button className="xq-btn primary big" disabled={joining} onClick={() => void join(championship.id)} type="button">
+              {joining ? "Please wait…" : championship.entryFee > 0 && !championship.feePaid ? `Pay ₹${championship.entryFee} & join` : "Join the championship"}
+            </button>
           ) : null}
         </div>
         <div className="xq-champ-clock">
@@ -124,7 +187,11 @@ export function ChampionshipView({ notify, onChanged }: { notify: Notify; onChan
             <li>Ranking is by percentage return; ties go to whoever joined first.</li>
             <li>Final standings are taken at the closing bell on {istDayFullYear.format(new Date(championship.endsAt))}.</li>
           </ol>
-          <p className="xq-muted small">Practice money only. No entry fee and no real money changes hands.</p>
+          <p className="xq-muted small">
+            {championship.entryFee > 0
+              ? `Entry fee ₹${championship.entryFee}, paid once securely through Razorpay (UPI, cards, net banking). Trading itself uses practice money only.`
+              : "Free to join. Trading uses practice money only."}
+          </p>
         </section>
       </div>
     </div>
