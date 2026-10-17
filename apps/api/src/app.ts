@@ -58,12 +58,25 @@ export async function buildApp(dependencies: AppDependencies) {
   app.get("/v1/health", async () => {
     const { config } = dependencies;
     let database: "ok" | "missing" | "unreachable" = config.databaseUrl ? "ok" : "missing";
+    let databaseError: string | undefined;
     if (config.databaseUrl) {
-      try { await dependencies.pool.query("SELECT 1 FROM users LIMIT 1"); } catch { database = "unreachable"; }
+      try {
+        await dependencies.pool.query("SELECT 1 FROM users LIMIT 1");
+      } catch (error) {
+        database = "unreachable";
+        // Error code and a credential-free reason only, so a wrong DATABASE_URL can be spotted from outside.
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        const text = error instanceof Error ? error.message : String(error);
+        databaseError = `${code} ${/:\/\/|@/.test(text) ? "" : text.slice(0, 120)}`.trim();
+      }
     }
+    let databaseHost: string | undefined;
+    try { databaseHost = config.databaseUrl ? new URL(config.databaseUrl).hostname : undefined; } catch { databaseHost = "invalid URL"; }
     return {
       status: database === "ok" && !config.problems.length ? "ok" : "degraded",
       database,
+      databaseHost,
+      databaseError,
       sessionSecret: Boolean(process.env.AUTH_SESSION_SECRET && Buffer.byteLength(process.env.AUTH_SESSION_SECRET.trim()) >= 32),
       supabase: Boolean(config.supabase),
       webOrigin: config.webOrigin,
