@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import type { MarketFeed, Quote } from "./market/feed.js";
+import { instruments } from "./market/instruments.js";
 
 const initialCash = 100000;
 const orderSchema = {
@@ -321,6 +322,8 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
           dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,
           status: { isOpen: status.isOpen, reason: status.reason, nextChangeAt: status.nextChangeAt },
           quotes,
+          indices: await market.indexQuotes(),
+          nifty50: instruments.filter((instrument) => instrument.nifty50).map((instrument) => instrument.symbol),
         },
         portfolio: {
           totalValue: portfolioValueNow, dayChange, dayChangePercent, availableCash,

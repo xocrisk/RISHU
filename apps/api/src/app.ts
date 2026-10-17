@@ -7,6 +7,7 @@ import { registerAuthRoutes } from "./auth.js";
 import { registerOAuthRoutes } from "./oauth.js";
 import { registerPracticeRoutes } from "./practice.js";
 import { MarketFeed } from "./market/feed.js";
+import { registerMarketRoutes } from "./market/routes.js";
 import { registerStaticWeb } from "./static.js";
 
 function isValidationError(error: unknown): boolean {
@@ -44,7 +45,8 @@ export async function buildApp(dependencies: AppDependencies) {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  await app.register(cors, { origin: allowedOrigins, credentials: true });
+  // @fastify/cors only allows GET, HEAD and POST by default; cancelling orders and settings use DELETE and PUT.
+  await app.register(cors, { origin: allowedOrigins, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "DELETE"] });
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   app.get("/health", async () => ({ status: "ok" }));
   await registerAuthRoutes(app, {
@@ -55,6 +57,7 @@ export async function buildApp(dependencies: AppDependencies) {
   });
   await registerOAuthRoutes(app, { pool: dependencies.pool, config: dependencies.config });
   await registerPracticeRoutes(app, dependencies.pool, dependencies.market ?? new MarketFeed(dependencies.pool));
+  await registerMarketRoutes(app);
   if (dependencies.config.webRoot) registerStaticWeb(app, dependencies.config.webRoot);
   return app;
 }

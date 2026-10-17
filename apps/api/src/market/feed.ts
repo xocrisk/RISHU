@@ -32,10 +32,24 @@ const batchSize = 20; // Yahoo's spark endpoint accepts at most 20 symbols per r
 const yahooHeaders = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
 };
-const names = new Map(instruments.map((instrument) => [instrument.symbol, instrument.name]));
+// Market indices shown alongside the stocks. They are quoted but cannot be traded.
+export const indexDefinitions = [
+  { symbol: "NIFTY 50", name: "Nifty 50", yahoo: "^NSEI" },
+  { symbol: "NIFTY BANK", name: "Nifty Bank", yahoo: "^NSEBANK" },
+  { symbol: "SENSEX", name: "BSE Sensex", yahoo: "^BSESN" },
+];
+const indexSymbols = new Set(indexDefinitions.map((index) => index.symbol));
+const names = new Map([
+  ...instruments.map((instrument) => [instrument.symbol, instrument.name] as const),
+  ...indexDefinitions.map((index) => [index.symbol, index.name] as const),
+]);
 const order = new Map(instruments.map((instrument, index) => [instrument.symbol, index]));
+const yahooBySymbol = new Map(indexDefinitions.map((index) => [index.symbol, index.yahoo]));
+const symbolByYahoo = new Map(indexDefinitions.map((index) => [index.yahoo, index.symbol]));
 
-const yahooSymbol = (symbol: string) => `${symbol}.NS`;
+export const yahooSymbol = (symbol: string) => yahooBySymbol.get(symbol) ?? `${symbol}.NS`;
+const fromYahoo = (yahoo: string) => symbolByYahoo.get(yahoo) ?? yahoo.replace(/\.NS$/, "");
+export const isQuotedSymbol = (symbol: string) => names.has(symbol);
 const round = (value: number) => Number(value.toFixed(2));
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -45,6 +59,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export class MarketFeed {
   private quotes = new Map<string, Quote>();
+  private indices = new Map<string, Quote>();
   private loading: Promise<void> | null = null;
   private refreshing: Promise<void> | null = null;
   private fetchingOpens = false;
@@ -89,6 +104,12 @@ export class MarketFeed {
     return [...this.quotes.values()].sort((a, b) => (order.get(a.symbol) ?? 1e9) - (order.get(b.symbol) ?? 1e9));
   }
 
+  /** NIFTY 50, NIFTY BANK and SENSEX, in that order. */
+  async indexQuotes(): Promise<Quote[]> {
+    await this.list();
+    return indexDefinitions.flatMap((index) => this.indices.get(index.symbol) ?? []);
+  }
+
   async get(symbol: string): Promise<Quote | undefined> {
     await this.list();
     return this.quotes.get(symbol);
@@ -98,7 +119,7 @@ export class MarketFeed {
     if (!this.lastUpdatedAt) return true;
     const now = this.now();
     // Some stocks are missing (e.g. a refresh partly failed): retry, but no more than every 10 minutes.
-    const incomplete = this.quotes.size < instruments.length - 10;
+    const incomplete = this.quotes.size < instruments.length - 10 || this.indices.size < indexDefinitions.length;
     if (incomplete && (!this.lastAttemptAt || now.getTime() - this.lastAttemptAt.getTime() >= refreshIntervalMs)) return true;
     if (marketStatus(now).isOpen) return now.getTime() - this.lastUpdatedAt.getTime() >= refreshIntervalMs;
     // Closed: refresh once the last session's closing prices have settled.
@@ -115,8 +136,9 @@ export class MarketFeed {
       for (const row of result.rows) {
         if (!names.has(row.symbol)) continue; // dropped from the NIFTY 500
         const sessionOpen = row.open !== null && row.open_date === istDate(row.market_time) ? Number(row.open) : null;
-        this.quotes.set(row.symbol, this.toQuote(row.symbol, Number(row.price), Number(row.previous_close),
-          Number(row.high), Number(row.low), Number(row.volume), row.market_time, sessionOpen));
+        (indexSymbols.has(row.symbol) ? this.indices : this.quotes).set(row.symbol, this.toQuote(row.symbol,
+          Number(row.price), Number(row.previous_close), Number(row.high), Number(row.low), Number(row.volume),
+          row.market_time, sessionOpen));
         if (!this.lastUpdatedAt || row.updated_at > this.lastUpdatedAt) this.lastUpdatedAt = row.updated_at;
       }
     })().catch((error) => {
@@ -165,6 +187,11 @@ export class MarketFeed {
       }
       await sleep(250);
     }
+    try {
+      await this.refreshBatch(indexDefinitions.map((index) => index.symbol));
+    } catch (error) {
+      this.log.warn(`Market feed index refresh failed: ${String(error)}`);
+    }
     if (updated === 0) throw new Error("No quotes could be fetched.");
     this.lastUpdatedAt = this.now();
     const missing = symbols.filter((symbol) => !this.quotes.has(symbol));
@@ -182,7 +209,7 @@ export class MarketFeed {
     const body = await response.json() as { spark?: { result?: { symbol: string; response?: { meta?: SparkMeta }[] }[] } };
     const rows = (body.spark?.result ?? []).flatMap((entry) => {
       const meta = entry.response?.[0]?.meta;
-      const symbol = entry.symbol.replace(/\.NS$/, "");
+      const symbol = fromYahoo(entry.symbol);
       if (!meta?.regularMarketPrice || !meta.chartPreviousClose || !meta.regularMarketTime || !names.has(symbol)) return [];
       return [{
         symbol,
@@ -209,10 +236,11 @@ export class MarketFeed {
       })))],
     );
     for (const row of rows) {
-      const existing = this.quotes.get(row.symbol);
+      const target = indexSymbols.has(row.symbol) ? this.indices : this.quotes;
+      const existing = target.get(row.symbol);
       // Keep the day open only if it belongs to the same session as the new price.
       const open = existing?.open != null && istDate(new Date(existing.marketTime)) === istDate(row.marketTime) ? existing.open : null;
-      this.quotes.set(row.symbol, this.toQuote(row.symbol, row.price, row.previousClose, row.high, row.low,
+      target.set(row.symbol, this.toQuote(row.symbol, row.price, row.previousClose, row.high, row.low,
         row.volume, row.marketTime, open));
     }
     return rows.length;
