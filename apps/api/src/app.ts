@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import Fastify from "fastify";
 import type { Pool } from "pg";
 import cors from "@fastify/cors";
@@ -78,6 +79,10 @@ export async function buildApp(dependencies: AppDependencies) {
       databaseHost,
       databaseError,
       sessionSecret: Boolean(process.env.AUTH_SESSION_SECRET && Buffer.byteLength(process.env.AUTH_SESSION_SECRET.trim()) >= 32),
+      // One-way, 6-byte fingerprint: tells whether two deployments share a secret without revealing anything about it.
+      sessionSecretId: process.env.AUTH_SESSION_SECRET
+        ? createHash("sha256").update(`xocrisk-secret-id:${process.env.AUTH_SESSION_SECRET.trim()}`).digest("hex").slice(0, 12)
+        : undefined,
       supabase: Boolean(config.supabase),
       webOrigin: config.webOrigin,
       problems: config.problems,

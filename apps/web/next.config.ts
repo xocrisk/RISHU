@@ -20,6 +20,23 @@ const nextConfig: NextConfig = {
   // The API (built to apps/api/dist first by turbo) and its server-only libraries stay plain Node modules.
   transpilePackages: ["@xocrisk/core"],
   serverExternalPackages: ["@xocrisk/api", "fastify", "pg", "nodemailer", "@fastify/cors", "@fastify/rate-limit", "@fastify/formbody", "jose"],
+  // Basic hardening for the website: no framing (clickjacking), no MIME sniffing, no referrer leaks off-site,
+  // and no camera/mic/location for any page. (Static export has no server, so headers don't apply there.)
+  ...(staticExport ? {} : {
+    async headers() {
+      return [{
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self)" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+        ],
+      }];
+    },
+  }),
   turbopack: {
     rules: {
       "*.css": {
