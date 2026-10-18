@@ -40,8 +40,15 @@ export const metadata: Metadata = {
   },
 };
 
+// The mobile app (static export) feels native: no pinch or double-tap zoom of the whole page. The stock chart
+// still zooms, since it handles touch gestures itself. The website stays zoomable for readability.
+const isAppBuild = process.env.XOCRISK_STATIC_EXPORT === "1";
+
 export const viewport: Viewport = {
   themeColor: "#111111",
+  width: "device-width",
+  initialScale: 1,
+  ...(isAppBuild ? { maximumScale: 1, minimumScale: 1, userScalable: false } : {}),
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
