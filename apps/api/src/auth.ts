@@ -40,7 +40,8 @@ declare module "fastify" {
   }
 }
 
-const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
+// Sessions renew themselves while in use (see the preHandler), so people stay signed in until they log out.
+const sessionLifetimeMs = 180 * 24 * 60 * 60 * 1000;
 const temporarySessionLifetimeMs = 12 * 60 * 60 * 1000;
 // The Android/iOS apps keep people signed in (behind their own app lock) and send the token as a Bearer header.
 const appSessionLifetimeMs = 180 * 24 * 60 * 60 * 1000;
@@ -124,22 +125,30 @@ export async function registerAuthRoutes(
   app.decorateRequest("authUser", null);
   app.decorateRequest("sessionHash", null);
 
-  app.addHook("preHandler", async (request) => {
+  app.addHook("preHandler", async (request, reply) => {
     if (request.method === "OPTIONS") return;
     const token = sessionToken(request);
     if (!token) return;
     const tokenHash = hashSessionToken(token, sessionSecret);
-    const result = await pool.query<AuthUser>(
-      `SELECT u.id, u.email, u.mobile, u.full_name, u.college
+    const result = await pool.query<AuthUser & { renew: boolean }>(
+      `SELECT u.id, u.email, u.mobile, u.full_name, u.college,
+              -- Long sessions in use get their full lifetime back once a day; 12-hour ones never stretch.
+              (s.expires_at > now() + interval '12 hours' AND s.expires_at < now() + $2 * interval '1 millisecond' - interval '1 day') AS renew
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.expires_at > now()
          AND u.deletion_requested_at IS NULL`,
-      [tokenHash],
+      [tokenHash, sessionLifetimeMs],
     );
-    if (result.rows[0]) {
-      request.authUser = result.rows[0];
+    const row = result.rows[0];
+    if (row) {
+      const { renew, ...user } = row;
+      request.authUser = user;
       request.sessionHash = tokenHash;
+      if (renew) {
+        await pool.query("UPDATE auth_sessions SET expires_at = $2 WHERE token_hash = $1", [tokenHash, new Date(Date.now() + sessionLifetimeMs)]);
+        if (!request.headers.authorization) reply.header("Set-Cookie", sessionCookie(token, environment));
+      }
     }
   });
 
@@ -623,7 +632,7 @@ export async function registerAuthRoutes(
 }
 
 export function sessionCookie(token: string, environment: string, rememberMe = true): string {
-  return `xocrisk_session=${token}; Path=/; HttpOnly; SameSite=Lax${rememberMe ? "; Max-Age=2592000" : ""}${environment === "production" ? "; Secure" : ""}`;
+  return `xocrisk_session=${token}; Path=/; HttpOnly; SameSite=Lax${rememberMe ? `; Max-Age=${sessionLifetimeMs / 1000}` : ""}${environment === "production" ? "; Secure" : ""}`;
 }
 
 function cookieValue(cookieHeader: string | undefined, name: string): string | null {

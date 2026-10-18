@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import "./auth.css";
-import { themeBootScript } from "../lib/theme";
+import { signedInBootScript, themeBootScript } from "../lib/theme";
 import ServiceWorkerRegistration from "./service-worker-registration";
 
 const geistSans = Geist({
@@ -51,7 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <script dangerouslySetInnerHTML={{ __html: signedInBootScript + themeBootScript }} />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

@@ -26,6 +26,17 @@ export function setAppToken(token: string | null): void {
   } catch { /* storage blocked */ }
 }
 
+// Set while this device has a session, so the login page can send people straight to the dashboard before it
+// even draws (see signedInBootScript). The session itself stays in the HttpOnly cookie / app token.
+const signedInKey = "xocrisk.signedIn";
+
+export function markSignedIn(signedIn: boolean): void {
+  try {
+    if (signedIn) localStorage.setItem(signedInKey, "1");
+    else localStorage.removeItem(signedInKey);
+  } catch { /* storage blocked */ }
+}
+
 /** fetch() against the API with whichever credentials this platform uses. */
 export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -34,7 +45,10 @@ export function apiFetch(path: string, init: RequestInit = {}): Promise<Response
     const token = appToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${authApiOrigin}${path}`, { ...init, headers, credentials: "include" });
+  // A trailing slash skips the site's slash redirect, which would otherwise add a round trip to every call.
+  const [pathname, query] = path.split("?");
+  const url = `${authApiOrigin}${pathname.endsWith("/") ? pathname : `${pathname}/`}${query === undefined ? "" : `?${query}`}`;
+  return fetch(url, { ...init, headers, credentials: "include" });
 }
 
 export function useAuthApi() {
@@ -55,5 +69,6 @@ export async function createAuthSession(
     return { success: false, message: result.message ?? "Authentication could not be completed." };
   }
   if (result.token) setAppToken(result.token);
+  markSignedIn(true);
   return { success: true, email: result.user.email ?? null };
 }

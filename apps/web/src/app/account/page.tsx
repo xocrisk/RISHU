@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearAppLock } from "../../lib/app-lock";
-import { setAppToken, useAuthApi } from "../../lib/auth-session";
+import { markSignedIn, setAppToken, useAuthApi } from "../../lib/auth-session";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
 import CompleteProfile from "./complete-profile";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
@@ -150,6 +150,7 @@ export default function AccountPage() {
     if (response.status === 401) {
       clearDashboardSnapshot();
       setAppToken(null);
+      markSignedIn(false);
       router.replace("/login");
       return;
     }
@@ -157,6 +158,7 @@ export default function AccountPage() {
     const next = await response.json() as Dashboard;
     setData(next);
     saveDashboardSnapshot(next);
+    markSignedIn(true);
     setFetchedAt(new Date());
     setLoadError("");
   }, [authFetch, router]);
@@ -338,6 +340,7 @@ export default function AccountPage() {
       await authFetch("/v1/auth/logout", { method: "POST" }).catch(() => undefined);
       clearDashboardSnapshot();
       setAppToken(null);
+      markSignedIn(false);
       clearAppLock();
       router.replace("/login");
     } catch {
@@ -354,6 +357,7 @@ export default function AccountPage() {
       if (!response.ok) throw new Error();
       clearDashboardSnapshot();
       setAppToken(null);
+      markSignedIn(false);
       clearAppLock();
       setDeletionRequested(true);
     } catch {

@@ -6,10 +6,10 @@ let prefetched: { at: number; response: Promise<Response> } | null = null;
 const snapshotKey = "xocrisk.dashboard.v1";
 
 export function prefetchDashboard(email: string | null): void {
-  // A saved dashboard from someone else who used this tab must never flash up for the new user.
+  // A saved dashboard from someone else who used this device must never flash up for the new user.
   const snapshot = readDashboardSnapshot<{ user?: { email?: string } }>();
   if (snapshot && (!email || snapshot.user?.email?.toLowerCase() !== email.toLowerCase())) {
-    try { sessionStorage.removeItem(snapshotKey); } catch { /* storage blocked */ }
+    try { localStorage.removeItem(snapshotKey); } catch { /* storage blocked */ }
   }
   prefetched = { at: Date.now(), response: apiFetch("/v1/practice/dashboard") };
 }
@@ -22,10 +22,10 @@ export function takePrefetchedDashboard(): Promise<Response> | null {
   return response;
 }
 
-/** Last dashboard seen in this tab, shown instantly while a fresh copy loads. */
+/** Last dashboard seen on this device (cleared on logout), shown instantly while a fresh copy loads. */
 export function readDashboardSnapshot<T>(): T | null {
   try {
-    const raw = sessionStorage.getItem(snapshotKey);
+    const raw = localStorage.getItem(snapshotKey);
     return raw ? JSON.parse(raw) as T : null;
   } catch {
     return null;
@@ -33,10 +33,10 @@ export function readDashboardSnapshot<T>(): T | null {
 }
 
 export function saveDashboardSnapshot(value: unknown): void {
-  try { sessionStorage.setItem(snapshotKey, JSON.stringify(value)); } catch { /* storage full or blocked */ }
+  try { localStorage.setItem(snapshotKey, JSON.stringify(value)); } catch { /* storage full or blocked */ }
 }
 
 export function clearDashboardSnapshot(): void {
   prefetched = null;
-  try { sessionStorage.removeItem(snapshotKey); } catch { /* storage blocked */ }
+  try { localStorage.removeItem(snapshotKey); } catch { /* storage blocked */ }
 }

@@ -237,7 +237,7 @@ test("login checks the stored password hash before issuing a session", async () 
     });
     assert.equal(response.statusCode, 200);
     assert.match(response.headers["set-cookie"], /HttpOnly/);
-    assert.match(response.headers["set-cookie"], /Max-Age=2592000/);
+    assert.match(response.headers["set-cookie"], /Max-Age=15552000/);
     assert.ok(sessionExpiresAt.getTime() - Date.now() > 29 * 24 * 60 * 60 * 1000);
     assert.equal(response.json().token, undefined);
   } finally {

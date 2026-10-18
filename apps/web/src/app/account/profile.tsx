@@ -115,18 +115,10 @@ export function ThemePicker() {
   const [choice, setChoice] = useState<ThemeChoice>("light");
   // eslint-disable-next-line react-hooks/set-state-in-effect -- read the saved choice after hydration
   useLayoutEffect(() => { setChoice(themeChoice()); }, []);
-  useEffect(() => {
-    if (choice !== "system") return;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => saveTheme("system");
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [choice]);
   return (
     <div aria-label="Theme" className="xq-theme" role="radiogroup">
       {([["light", "Light", "M10 14a4 4 0 100-8 4 4 0 000 8zM10 1v2M10 17v2M1 10h2M17 10h2M3.6 3.6l1.4 1.4M15 15l1.4 1.4M3.6 16.4L5 15M15 5l1.4-1.4"],
-        ["dark", "Dark", "M16 12.5A7 7 0 017.5 4a7 7 0 108.5 8.5z"],
-        ["system", "System", "M3 4h14v10H3zM7 17h6M10 14v3"]] as const).map(([value, label, icon]) => (
+        ["dark", "Dark", "M16 12.5A7 7 0 017.5 4a7 7 0 108.5 8.5z"]] as const).map(([value, label, icon]) => (
         <button aria-checked={choice === value} key={value} onClick={() => { setChoice(value); saveTheme(value); }} role="radio" type="button">
           <svg aria-hidden="true" viewBox="0 0 20 20"><path d={icon} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
           {label}

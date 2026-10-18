@@ -31,6 +31,8 @@ export async function buildApp(dependencies: AppDependencies) {
       redact: ["req.headers.cookie", "req.headers.authorization"],
     },
     bodyLimit: 16 * 1024,
+    // The website calls /v1/... with a trailing slash (its pages use them, so Next would otherwise redirect first).
+    routerOptions: { ignoreTrailingSlash: true },
   });
   app.setErrorHandler((error, request, reply) => {
     if (isValidationError(error)) {

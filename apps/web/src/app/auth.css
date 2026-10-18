@@ -168,7 +168,7 @@
   display: flex; flex-direction: column;
   border-left: 1px solid var(--line);
 }
-.auth-page .tape { position: relative; display: flex; align-items: stretch; height: 42px; border-bottom: 1px solid var(--line); background: #FFFFFF; overflow: hidden; white-space: nowrap; font-size: 13px; }
+.auth-page .tape { position: relative; display: flex; align-items: stretch; height: 42px; border-bottom: 1px solid var(--line); background: var(--panel); overflow: hidden; white-space: nowrap; font-size: 13px; }
 .auth-page .tape-view { position: relative; flex: 1; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%); }
 .auth-page .tape-track { display: inline-flex; align-items: center; height: 100%; animation: auth-tape 60s linear infinite; }
 .auth-page .tape:hover .tape-track { animation-play-state: paused; }
@@ -198,7 +198,7 @@
 .auth-page .slip dt { color: var(--paper-muted); }
 .auth-page .slip dd { margin: 0; text-align: right; font-weight: 600; }
 .auth-page .slip .total { padding-top: 12px; border-top: 1px dashed var(--paper-rule); font-size: 17px; color: var(--paper-ink); }
-.auth-page .slip dd.total { font-weight: 800; color: #111111; }
+.auth-page .slip dd.total { font-weight: 800; color: var(--paper-ink); }
 .auth-page .slip-foot { display: flex; justify-content: space-between; align-items: end; margin-top: 16px; font-size: 11.5px; color: var(--paper-muted); }
 .auth-page .barcode { width: 120px; height: 26px; background: repeating-linear-gradient(90deg, var(--paper-ink) 0 1px, transparent 1px 3px, var(--paper-ink) 3px 5px, transparent 5px 6px, var(--paper-ink) 6px 7px, transparent 7px 10px); opacity: .8; }
 .auth-page .stamp { position: absolute; right: 20px; top: 50px; transform: rotate(9deg); border: 2px solid #111111; color: #111111; border-radius: 6px; padding: 2px 9px; font-weight: 800; font-size: 13px; letter-spacing: .03em; opacity: .85; mix-blend-mode: multiply; }
@@ -212,7 +212,7 @@
   .auth-page .page { grid-template-columns: minmax(0, 1fr); }
   .auth-page .market { display: none; }
   .auth-page .auth { padding: 0 20px 24px; }
-  .auth-page .mobile-tape { display: flex; margin: 0 -20px; background: #FFFFFF; }
+  .auth-page .mobile-tape { display: flex; margin: 0 -20px; background: var(--panel); }
   .auth-page .brand-wrap { padding-top: 20px; margin: 0 auto; }
   .auth-page .auth-body { margin: 0 auto; padding: 34px 0; }
   .auth-page .foot { margin: 0 auto; width: 100%; }
@@ -226,3 +226,42 @@
   .auth-page .tape-track { animation: none; }
   .auth-page .tab-thumb, .auth-page .reveal { transition: none; }
 }
+
+/* ================= Dark theme (chosen under Profile → Appearance; remembered on this device) ================= */
+:root[data-theme="dark"] body { background: #0b0d12; color: #e8eaee; }
+:root[data-theme="dark"] .auth-page {
+  --bg: #0b0d12;
+  --ink: #E8EAEE;
+  --muted: #9AA3AF;
+  --faint: #6B7380;
+  --line: #262C36;
+  --line-strong: #353D4A;
+  --field: #12161D;
+  --accent: #E8EAEE;
+  --accent-soft: rgba(232, 234, 238, .14);
+  --btn: #F2F2F0;
+  --btn-hover: #D9D9D6;
+  --on-btn: #0B0D12;
+  --up: #3FBF8A;
+  --down: #F0735A;
+  --error: #F0735A;
+  --error-bg: rgba(240, 115, 90, .12);
+  --ok-bg: #161B23;
+  --pop: #151A22;
+  --pop-shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 44px -14px rgba(0,0,0,.7);
+  --hl: rgba(184, 154, 91, .35);
+  --panel: #10141A;
+  --panel-line: rgba(255, 255, 255, .04);
+  --panel-ink: #E8EAEE;
+  --panel-muted: #9AA3AF;
+  --paper: #171C24;
+  --paper-ink: #E8EAEE;
+  --paper-muted: #9AA3AF;
+  --paper-rule: #2C3340;
+  color-scheme: dark;
+}
+:root[data-theme="dark"] .auth-page .slip { border-color: #2C3340; }
+:root[data-theme="dark"] .auth-page .slip.back { --paper: #12161D; }
+:root[data-theme="dark"] .auth-page .stamp { border-color: #E8EAEE; color: #E8EAEE; mix-blend-mode: normal; }
+:root[data-theme="dark"] .auth-page .tick .up { color: #3FBF8A; background: rgba(63,191,138,.12); }
+:root[data-theme="dark"] .auth-page .tick .down { color: #F0735A; background: rgba(240,115,90,.12); }

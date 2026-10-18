@@ -6,6 +6,8 @@ import { waitUntil } from "@vercel/functions";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+// Run next to the Supabase database (Tokyo): every query is then a local hop instead of a trip from the US.
+export const preferredRegion = "hnd1";
 
 type Method = "GET" | "HEAD" | "POST" | "PUT" | "DELETE" | "OPTIONS";
 

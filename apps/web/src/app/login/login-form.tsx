@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { isValidEmail, normalizeIndianMobile } from "@xocrisk/core";
-import { apiFetch, authApiOrigin, createAuthSession, isNativeApp } from "../../lib/auth-session";
+import { apiFetch, authApiOrigin, createAuthSession, markSignedIn } from "../../lib/auth-session";
 import { prefetchDashboard } from "../../lib/dashboard-cache";
 import { startGoogleLogin, supabaseConfigured } from "../../lib/supabase";
 
@@ -75,7 +74,6 @@ export default function LoginForm() {
   const [pwError, setPwError] = useState("");
   const [status, setStatus] = useState<Status>(null);
   const [pending, setPending] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
   const oauthResult = oauthMessages[new URLSearchParams(search).get("oauth") ?? ""];
   const visibleStatus: Status = status ?? (oauthResult ? { kind: oauthResult.error ? "error" : "ok", text: oauthResult.text } : null);
 
@@ -93,9 +91,9 @@ export default function LoginForm() {
     apiFetch("/v1/auth/me")
       .then((response) => {
         if (cancelled || !response.ok) return;
-        // The app stays signed in on this device (its app lock protects it), so skip the login form.
-        if (isNativeApp()) router.replace("/account");
-        else setLoggedIn(true);
+        // Signed in already (web or app): skip the login form. The app lock protects the app.
+        markSignedIn(true);
+        router.replace("/account");
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -193,7 +191,7 @@ export default function LoginForm() {
 
   const statusBox = (
     <div aria-live="polite" className={`status ${visibleStatus?.kind ?? ""}`} role="status">
-      {visibleStatus?.text ?? (loggedIn ? <>You&apos;re already logged in. <Link className="link" href="/account">Open dashboard</Link></> : "")}
+      {visibleStatus?.text ?? ""}
     </div>
   );
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiFetch, setAppToken } from "../../lib/auth-session";
+import { apiFetch, markSignedIn, setAppToken } from "../../lib/auth-session";
 import { prefetchDashboard } from "../../lib/dashboard-cache";
 import { supabase } from "../../lib/supabase";
 import "../account/dashboard.css";
@@ -29,6 +29,7 @@ async function finishGoogleLogin(): Promise<string | null> {
   const body = await response.json().catch(() => ({})) as { message?: string; token?: string; user?: { email?: string | null } };
   if (!response.ok || !body.user) return body.message ?? "Google sign-in could not be completed. Try again.";
   if (body.token) setAppToken(body.token);
+  markSignedIn(true);
   prefetchDashboard(body.user.email ?? null);
   return null;
 }
