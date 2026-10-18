@@ -11,6 +11,16 @@ import { MarketFeed } from "./market/feed.js";
 import { registerMarketRoutes } from "./market/routes.js";
 import { registerCommunityRoutes } from "./community.js";
 
+// Whether this server can reach Supabase Auth with its secret key: "ok", an HTTP status, or the error name.
+async function probeSupabase(supabase: { url: string; secretKey: string }): Promise<string> {
+  try {
+    const response = await fetch(`${supabase.url}/auth/v1/settings`, { headers: { apikey: supabase.secretKey }, signal: AbortSignal.timeout(5000) });
+    return response.ok ? "ok" : `HTTP ${response.status}`;
+  } catch (error) {
+    return error instanceof Error ? `${error.name}: ${error.message.slice(0, 80)}` : "failed";
+  }
+}
+
 function isValidationError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "validation" in error;
 }
@@ -86,6 +96,7 @@ export async function buildApp(dependencies: AppDependencies) {
         ? createHash("sha256").update(`xocrisk-secret-id:${process.env.AUTH_SESSION_SECRET.trim()}`).digest("hex").slice(0, 12)
         : undefined,
       supabase: Boolean(config.supabase),
+      supabaseCheck: config.supabase ? await probeSupabase(config.supabase) : undefined,
       webOrigin: config.webOrigin,
       problems: config.problems,
     };

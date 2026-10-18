@@ -34,6 +34,8 @@ function optionalSupabase(): SupabaseConfig | undefined {
   const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
   if (!url && !secretKey) return undefined;
   if (!url || !secretKey) return misconfigured("SUPABASE_URL and SUPABASE_SECRET_KEY must be configured together");
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) return misconfigured("SUPABASE_URL must look like https://<project>.supabase.co");
+  if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(secretKey)) return misconfigured("SUPABASE_SECRET_KEY must be the sb_secret_... key with nothing around it");
   return { url, secretKey };
 }
 

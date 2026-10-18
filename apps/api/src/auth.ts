@@ -456,9 +456,15 @@ export async function registerAuthRoutes(
     config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
   }, async (request, reply) => {
     if (!supabase) return reply.code(503).send({ message: "Google sign-in isn't set up yet. Use your email and password." });
-    const response = await fetch(`${supabase.url}/auth/v1/user`, {
-      headers: { apikey: supabase.secretKey, Authorization: `Bearer ${request.body.accessToken}` },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${supabase.url}/auth/v1/user`, {
+        headers: { apikey: supabase.secretKey, Authorization: `Bearer ${request.body.accessToken}` },
+      });
+    } catch (error) {
+      request.log.error({ reason: error instanceof Error ? error.message : String(error) }, "Supabase user lookup failed.");
+      return reply.code(503).send({ message: "Google sign-in is temporarily unavailable. Try again in a minute." });
+    }
     if (!response.ok) return reply.code(401).send({ message: "Your Google sign-in expired. Try again." });
     const identity = await response.json() as {
       email?: string; email_confirmed_at?: string | null; user_metadata?: { full_name?: string; name?: string };
