@@ -51,6 +51,21 @@ export function apiFetch(path: string, init: RequestInit = {}): Promise<Response
   return fetch(url, { ...init, headers, credentials: "include" });
 }
 
+let lastPreferenceSave = 0;
+
+/** True for a few seconds after a change here, while an older copy of the settings may still be in flight. */
+export function preferencesJustChanged(): boolean {
+  return Date.now() - lastPreferenceSave < 8000;
+}
+
+/** Saves settings on the account (theme, privacy, watchlist) so the app and the website stay the same. */
+export function savePreferences(changes: { theme?: "light" | "dark"; privacy?: boolean; watchlist?: string[] }): void {
+  lastPreferenceSave = Date.now();
+  void apiFetch("/v1/auth/preferences", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
+  }).catch(() => undefined);
+}
+
 export function useAuthApi() {
   return useCallback((path: string, init: RequestInit = {}) => apiFetch(path, init), []);
 }

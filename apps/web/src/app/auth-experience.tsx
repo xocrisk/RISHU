@@ -52,18 +52,8 @@ function TapeTrack() {
 }
 
 function BrandMark() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 28 28">
-      <g transform="rotate(40 14 14)">
-        <rect fill="var(--up)" height="27" rx=".7" width="1.4" x="13.3" y="0.5" />
-        <rect fill="var(--up)" height="9.5" rx="1.2" width="6" x="11" y="2.5" />
-      </g>
-      <g transform="rotate(-40 14 14)">
-        <rect fill="var(--down)" height="27" rx=".7" width="1.4" x="13.3" y="0.5" />
-        <rect fill="var(--down)" height="9.5" rx="1.2" width="6" x="11" y="16" />
-      </g>
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- tiny static logo; the static app export can't use next/image
+  return <img alt="" height="30" src="/icon-192.png" width="30" />;
 }
 
 export default function AuthExperience({ initialTab }: { initialTab: Tab }) {

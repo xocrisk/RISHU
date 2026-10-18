@@ -1,4 +1,4 @@
-const CACHE_NAME = "xocrisk-v1";
+const CACHE_NAME = "xocrisk-v2"; // bumped for the new logo
 const CORE_ASSETS = [
   "/",
   "/login/",
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
+  "/apple-icon.png",
 ];
 
 self.addEventListener("install", (event) => {

@@ -229,10 +229,10 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
       pool.query<{
         cash: string; realized_pnl: string; day_start_value: string; day_start_date: string; leaderboard_opt_in: boolean;
         full_name: string | null; college: string | null; email: string; mobile: string | null; uid: string;
-        member_since: Date; previous_login: Date | null; current_login: Date | null;
+        member_since: Date; previous_login: Date | null; current_login: Date | null; preferences: Record<string, unknown>;
       }>(
         `SELECT p.cash, p.realized_pnl, p.day_start_value, p.day_start_date::text, u.leaderboard_opt_in, u.full_name, u.college,
-           u.email, u.mobile, u.uid, u.created_at AS member_since,
+           u.email, u.mobile, u.uid, u.created_at AS member_since, u.preferences,
            -- The newest session is this visit; the one before it is the last login.
            (SELECT created_at FROM auth_sessions s WHERE s.user_id = u.id ORDER BY created_at DESC OFFSET 1 LIMIT 1) AS previous_login,
            (SELECT max(created_at) FROM auth_sessions s WHERE s.user_id = u.id) AS current_login
@@ -323,6 +323,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
         fullName: data.full_name, college: data.college, leaderboardOptIn: data.leaderboard_opt_in,
         email: data.email, mobile: data.mobile, uid: data.uid, memberSince: data.member_since,
         lastLoginAt: data.previous_login ?? data.current_login,
+        preferences: data.preferences,
       },
       market: {
         dataMode: "DELAYED", lastUpdatedAt: market.lastUpdatedAt,

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearAppLock } from "../../lib/app-lock";
-import { markSignedIn, setAppToken, useAuthApi } from "../../lib/auth-session";
+import { markSignedIn, preferencesJustChanged, savePreferences, setAppToken, useAuthApi } from "../../lib/auth-session";
+import { saveTheme, themeChoice } from "../../lib/theme";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
 import CompleteProfile from "./complete-profile";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
@@ -67,6 +68,37 @@ const bottomTabs: { id: Tab; label: string }[] = [
 const privacyKey = "xocrisk.privacy";
 
 type Toast = { id: number; kind: "ok" | "error"; text: string };
+
+type AccountPreferences = NonNullable<Dashboard["user"]["preferences"]>;
+/** Applies the account's saved settings (set in the app or on the website) to this device. Settings this device
+ * had before they were saved on the account are uploaded once instead. */
+function syncPreferences(saved: AccountPreferences | undefined, setStarred: (value: string[]) => void, setPrivacy: (value: boolean) => void) {
+  // Right after a change here, the poll may still carry the older copy; don't put it back.
+  if (preferencesJustChanged()) return;
+  const prefs = saved ?? {};
+  const upload: AccountPreferences = {};
+  if (Array.isArray(prefs.watchlist)) {
+    setStarred(prefs.watchlist);
+    try { localStorage.setItem(starredKey, JSON.stringify(prefs.watchlist)); } catch { /* storage blocked */ }
+  } else {
+    const local = readStarred();
+    if (local.length) upload.watchlist = local;
+  }
+  if (typeof prefs.privacy === "boolean") {
+    setPrivacy(prefs.privacy);
+    try { localStorage.setItem(privacyKey, prefs.privacy ? "1" : "0"); } catch { /* storage blocked */ }
+  } else {
+    let local = false;
+    try { local = localStorage.getItem(privacyKey) === "1"; } catch { /* storage blocked */ }
+    if (local) upload.privacy = true;
+  }
+  if (prefs.theme === "light" || prefs.theme === "dark") {
+    if (prefs.theme !== themeChoice()) saveTheme(prefs.theme);
+  } else if (themeChoice() === "dark") {
+    upload.theme = "dark";
+  }
+  if (Object.keys(upload).length) savePreferences(upload);
+}
 
 function readStarred(): string[] {
   try {
@@ -136,6 +168,7 @@ export default function AccountPage() {
   function changePrivacy(enabled: boolean) {
     setPrivacy(enabled);
     try { localStorage.setItem(privacyKey, enabled ? "1" : "0"); } catch { /* storage blocked */ }
+    savePreferences({ privacy: enabled });
   }
 
   const toast = useCallback((kind: Toast["kind"], text: string) => {
@@ -157,6 +190,7 @@ export default function AccountPage() {
     if (!response.ok) throw new Error("Dashboard service unavailable.");
     const next = await response.json() as Dashboard;
     setData(next);
+    syncPreferences(next.user.preferences, setStarred, setPrivacy);
     saveDashboardSnapshot(next);
     markSignedIn(true);
     setFetchedAt(new Date());
@@ -287,6 +321,7 @@ export default function AccountPage() {
   function saveStarred(next: string[]) {
     setStarred(next);
     try { localStorage.setItem(starredKey, JSON.stringify(next)); } catch { /* storage blocked: keep it for this visit */ }
+    savePreferences({ watchlist: next });
   }
 
   async function call(path: string, init: RequestInit, fallback: string): Promise<{ ok: boolean; message?: string }> {
