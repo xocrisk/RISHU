@@ -190,6 +190,7 @@ export async function registerAuthRoutes(
           [user.id, tokenHash, new Date(Date.now() + (isAppClient(request) ? appSessionLifetimeMs : sessionLifetimeMs))],
         );
         await client.query("COMMIT");
+        if (supabase) await mirrorUserToSupabase(supabase, user, request.log);
         return reply
           .header("Set-Cookie", sessionCookie(token, environment))
           .code(201)
@@ -647,6 +648,34 @@ export async function registerAuthRoutes(
       .code(202)
       .send({ message: "Your account deletion request has been recorded." });
   });
+}
+
+/**
+ * Lists an XOCRISK account under Supabase → Authentication → Users (email, name, mobile, college) so every user is
+ * visible there, not only Google ones. No password goes to Supabase; XOCRISK keeps its own hash. Never blocks signup.
+ */
+export async function mirrorUserToSupabase(
+  supabase: SupabaseConfig,
+  user: AuthUser,
+  log: { warn: (details: object, message: string) => void },
+): Promise<void> {
+  if (!user.email) return;
+  try {
+    const response = await fetch(`${supabase.url}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: { apikey: supabase.secretKey, Authorization: `Bearer ${supabase.secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        email_confirm: true,
+        user_metadata: { full_name: user.full_name, mobile: user.mobile, college: user.college, xocrisk_user_id: user.id },
+      }),
+      signal: AbortSignal.timeout(4000),
+    });
+    // 422: already there (e.g. signed in with Google before).
+    if (!response.ok && response.status !== 422) log.warn({ status: response.status }, "Couldn't list the new user in Supabase.");
+  } catch (error) {
+    log.warn({ reason: error instanceof Error ? error.message : String(error) }, "Couldn't list the new user in Supabase.");
+  }
 }
 
 export function sessionCookie(token: string, environment: string, rememberMe = true): string {
