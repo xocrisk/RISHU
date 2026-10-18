@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import "./auth.css";
 import { signedInBootScript, themeBootScript } from "../lib/theme";
+import NativeDeepLinks from "./native-deep-links";
 import ServiceWorkerRegistration from "./service-worker-registration";
 
 const geistSans = Geist({
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerRegistration />
+        <NativeDeepLinks />
       </body>
     </html>
   );

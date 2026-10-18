@@ -503,6 +503,18 @@ export async function registerAuthRoutes(
       .send({ user: publicUser(user), created, ...(app ? { token } : {}) });
   });
 
+  // Google sign-in from the Android/iOS app runs in the phone's browser (Google blocks it inside app web views).
+  // Supabase returns that browser here, and this hands the one-time code to the app through its own link scheme.
+  // The code is useless without the PKCE verifier that stays inside the app, so passing it along is safe.
+  app.get<{ Querystring: Record<string, string> }>("/v1/auth/app-callback", async (request, reply) => {
+    const forward = new URLSearchParams();
+    for (const name of ["code", "error", "error_code", "error_description"]) {
+      const value = request.query[name];
+      if (typeof value === "string" && value.length <= 2048) forward.set(name, value);
+    }
+    return reply.redirect(`com.xocrisk.app://sso-callback?${forward.toString()}`, 302);
+  });
+
   // The reset link from Supabase's email lands on /reset-password/ with a short-lived Supabase token that proves
   // the person owns the email. That token plus the new password sets the XOCRISK password.
   app.post<{ Body: { accessToken: string; password: string } }>("/v1/auth/password-reset/link", {
