@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearAppLock } from "../../lib/app-lock";
 import { markSignedIn, preferencesJustChanged, savePreferences, setAppToken, useAuthApi } from "../../lib/auth-session";
-import { saveTheme, themeChoice } from "../../lib/theme";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
 import CompleteProfile from "./complete-profile";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
@@ -91,11 +90,6 @@ function syncPreferences(saved: AccountPreferences | undefined, setStarred: (val
     let local = false;
     try { local = localStorage.getItem(privacyKey) === "1"; } catch { /* storage blocked */ }
     if (local) upload.privacy = true;
-  }
-  if (prefs.theme === "light" || prefs.theme === "dark") {
-    if (prefs.theme !== themeChoice()) saveTheme(prefs.theme);
-  } else if (themeChoice() === "dark") {
-    upload.theme = "dark";
   }
   if (Object.keys(upload).length) savePreferences(upload);
 }

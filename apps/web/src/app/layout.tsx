@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import "./auth.css";
-import { signedInBootScript, themeBootScript } from "../lib/theme";
+import { signedInBootScript } from "../lib/boot-script";
 import NativeDeepLinks from "./native-deep-links";
 import ServiceWorkerRegistration from "./service-worker-registration";
 
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: signedInBootScript + themeBootScript }} />
+        <script dangerouslySetInnerHTML={{ __html: signedInBootScript }} />
       </head>
       <body className="min-h-full flex flex-col">
         {children}

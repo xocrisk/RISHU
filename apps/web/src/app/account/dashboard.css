@@ -48,50 +48,6 @@
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
-/* Dark theme: same tokens, night palette. Chosen in Profile → Appearance. */
-:root[data-theme="dark"] .xq, :root[data-theme="dark"] .xq-splash {
-  --bg: #0b0d12;
-  --panel: #12151c;
-  --panel-2: #171b23;
-  --panel-3: #1f2430;
-  --line: #252b36;
-  --line-2: #323a48;
-  --text: #e8ebf1;
-  --muted: #9aa4b5;
-  --faint: #6b7486;
-  --gold: #d9a548;
-  --gold-2: #e9bf6a;
-  --gold-soft: rgba(217, 165, 72, .15);
-  --up: #22c55e;
-  --up-soft: rgba(34, 197, 94, .14);
-  --down: #f05252;
-  --down-soft: rgba(240, 82, 82, .14);
-  --buy: #16a34a;
-  --sell: #e5383b;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px -10px rgba(0, 0, 0, .5);
-  --surface: #1a1f29;
-  --hover: #161a22;
-  --gold-tint: rgba(217, 165, 72, .12);
-  --gold-tint-2: rgba(217, 165, 72, .08);
-  --gold-line: rgba(217, 165, 72, .35);
-  --text-2: #c3cad6;
-  --topbar: rgba(18, 21, 28, .88);
-  --veil: rgba(11, 13, 18, .6);
-  --banner-text: #e8c27a;
-  --error-bg: rgba(240, 82, 82, .12);
-  --error-text: #fca5a5;
-  --error-line: rgba(240, 82, 82, .35);
-  --up-tint: rgba(34, 197, 94, .1);
-  --warn-bg: rgba(245, 158, 11, .14);
-  --warn-text: #fbbf24;
-  --mis-bg: rgba(99, 102, 241, .16);
-  --mis-text: #a5b4fc;
-  --danger-line: rgba(240, 82, 82, .4);
-  --ink: #e8ebf1;
-  --on-ink: #0b0d12;
-  color-scheme: dark;
-}
-:root[data-theme="dark"] body { background: #0b0d12; }
 .xq *, .xq *::before, .xq *::after { box-sizing: border-box; }
 /* :where() keeps these resets at zero specificity so component classes can size their own buttons. */
 :where(.xq) button { font: inherit; color: inherit; cursor: pointer; }
@@ -801,7 +757,7 @@
 .xq-pgroup { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .xq-pgroup h2 { margin: 0; padding: 14px 18px 6px; font-size: 12.5px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
 .xq-pgroup > :not(h2) { margin-inline: 0; }
-.xq-pgroup > .xq-theme, .xq-pgroup > .xq-lockset { padding: 6px 18px 16px; }
+.xq-pgroup > .xq-lockset { padding: 6px 18px 16px; }
 .xq-prow { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; }
 .xq-pgroup h2 + .xq-prow { border-top: 0; }
 .xq-prow:hover { background: var(--panel-2); }
@@ -810,10 +766,6 @@
 .xq-prow small { color: var(--muted); font-size: 12px; }
 .xq-prow svg { width: 22px; height: 22px; color: var(--muted); flex: none; }
 .xq-prow.danger b, .xq-prow.danger svg { color: var(--down); }
-.xq-theme { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.xq-theme button { display: grid; justify-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel-2); font-weight: 600; font-size: 13px; color: var(--text-2); }
-.xq-theme svg { width: 22px; height: 22px; }
-.xq-theme button[aria-checked="true"] { border-color: var(--gold); background: var(--gold-tint); color: var(--text); box-shadow: 0 0 0 3px var(--gold-soft); }
 .xq-lockset > p { margin: 0 0 10px; }
 .xq-lock-options { display: grid; gap: 8px; }
 .xq-lock-options button { display: grid; gap: 2px; text-align: left; padding: 12px 14px 12px 40px; position: relative; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel-2); }

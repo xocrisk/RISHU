@@ -630,12 +630,11 @@ export async function registerAuthRoutes(
   });
 
   // Settings that follow the person between the app and the website. Only the fields sent are changed.
-  app.put<{ Body: { theme?: "light" | "dark"; privacy?: boolean; watchlist?: string[] } }>("/v1/auth/preferences", {
+  app.put<{ Body: { privacy?: boolean; watchlist?: string[] } }>("/v1/auth/preferences", {
     schema: {
       body: {
         type: "object", additionalProperties: false, minProperties: 1,
         properties: {
-          theme: { type: "string", enum: ["light", "dark"] },
           privacy: { type: "boolean" },
           watchlist: { type: "array", maxItems: 100, uniqueItems: true, items: { type: "string", pattern: "^[A-Z0-9&_ .-]{1,24}$" } },
         },

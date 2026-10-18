@@ -29,7 +29,7 @@ export type Dashboard = {
     fullName: string | null; college: string | null; leaderboardOptIn: boolean;
     email: string; mobile: string | null; uid: string; memberSince: string; lastLoginAt: string | null;
     /** Saved on the account, so the app and the website match. */
-    preferences?: { theme?: "light" | "dark"; privacy?: boolean; watchlist?: string[] };
+    preferences?: { privacy?: boolean; watchlist?: string[] };
   };
   market: { dataMode: "DELAYED"; lastUpdatedAt: string | null; status: MarketStatus; quotes: Quote[]; indices: Quote[]; nifty50: string[] };
   portfolio: {

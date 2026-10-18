@@ -58,8 +58,8 @@ export function preferencesJustChanged(): boolean {
   return Date.now() - lastPreferenceSave < 8000;
 }
 
-/** Saves settings on the account (theme, privacy, watchlist) so the app and the website stay the same. */
-export function savePreferences(changes: { theme?: "light" | "dark"; privacy?: boolean; watchlist?: string[] }): void {
+/** Saves settings on the account (privacy, watchlist) so the app and the website stay the same. */
+export function savePreferences(changes: { privacy?: boolean; watchlist?: string[] }): void {
   lastPreferenceSave = Date.now();
   void apiFetch("/v1/auth/preferences", {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),

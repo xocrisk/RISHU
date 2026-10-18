@@ -122,19 +122,7 @@ export default function StockChart({ symbol, lastPrice, onMeta, actions }: Props
     };
     instance.subscribeCrosshairMove(onMove);
 
-    // Re-colour when the user switches light/dark.
-    const observer = new MutationObserver(() => {
-      const next = palette(element);
-      instance.applyOptions({
-        layout: { background: { type: ColorType.Solid, color: next.background }, textColor: next.text },
-        grid: { vertLines: { color: next.line }, horzLines: { color: next.line } },
-        rightPriceScale: { borderColor: next.line }, timeScale: { borderColor: next.line },
-      });
-      if (style === "candles") main.applyOptions({ upColor: next.up, downColor: next.down, wickUpColor: next.up, wickDownColor: next.down });
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => {
-      observer.disconnect();
       instance.unsubscribeCrosshairMove(onMove);
       instance.remove();
       api.current = null;
