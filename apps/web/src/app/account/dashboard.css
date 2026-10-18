@@ -890,3 +890,14 @@
   .xq-pcard { padding: 18px; }
 }
 @keyframes xq-sheet-up { from { transform: translateY(100%); } }
+
+/* ================= complete profile (after Google sign-in) ================= */
+.xq-sheet-note { margin: -6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.xq-pick-list { list-style: none; margin: -6px 0 0; padding: 4px; max-height: 240px; overflow-y: auto; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface); }
+.xq-pick-list li { display: grid; gap: 2px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.xq-pick-list li:hover { background: var(--gold-soft); }
+.xq-pick-list li.other { border-top: 1px solid var(--line-2); border-radius: 0 0 8px 8px; }
+.xq-pick-list b, .xq-pick-chosen b { font-size: 14px; font-weight: 600; }
+.xq-pick-list small, .xq-pick-chosen small { color: var(--muted); font-size: 12px; }
+.xq-pick-chosen { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; }
+.xq-pick-chosen > span { display: grid; gap: 2px; }

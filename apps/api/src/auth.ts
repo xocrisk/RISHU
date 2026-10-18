@@ -551,6 +551,56 @@ export async function registerAuthRoutes(
     }
   });
 
+  // Google sign-in gives a name and email only, so the dashboard asks once for the rest: college (with the LPU
+  // registration number for LPU students) and, if missing, a mobile number. College can't be changed afterwards.
+  app.put<{ Body: { college: string; mobile?: string; lpuRegistrationNumber?: string } }>("/v1/auth/profile/details", {
+    schema: {
+      body: {
+        type: "object", additionalProperties: false, required: ["college"],
+        properties: {
+          college: { type: "string", minLength: 1, maxLength: 160 },
+          mobile: { type: "string", minLength: 1, maxLength: 20 },
+          lpuRegistrationNumber: { type: "string", pattern: "^\\d{8}$" },
+        },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
+    if (!request.authUser) return reply.code(401).send({ message: "Sign in to continue." });
+    const current = (await pool.query<{ mobile: string | null; college: string | null }>(
+      "SELECT mobile, college FROM users WHERE id = $1", [request.authUser.id],
+    )).rows[0];
+    if (!current) return reply.code(401).send({ message: "Sign in to continue." });
+    if (current.college) return reply.code(409).send({ message: "Your college is already saved." });
+
+    const college = request.body.college.trim().replace(/\s+/g, " ");
+    if (college.length < 2) return reply.code(400).send({ message: "Enter your college or university." });
+    const registrationNumber = request.body.lpuRegistrationNumber?.trim() ?? "";
+    const isLpu = college === "Lovely Professional University (LPU)";
+    if ((isLpu && !/^\d{8}$/.test(registrationNumber)) || (!isLpu && registrationNumber)) {
+      return reply.code(400).send({ message: "Check the LPU registration number and try again." });
+    }
+    let mobile = current.mobile;
+    if (!mobile) {
+      mobile = request.body.mobile ? normalizeIndianMobile(request.body.mobile) : null;
+      if (!mobile) return reply.code(400).send({ message: "Enter a valid 10-digit Indian mobile number." });
+    }
+    try {
+      const updated = await pool.query<AuthUser>(
+        `UPDATE users SET college = $2, lpu_registration_number = $3, mobile = $4
+         WHERE id = $1 AND college IS NULL RETURNING id, email, mobile, full_name, college`,
+        [request.authUser.id, college, isLpu ? registrationNumber : null, mobile],
+      );
+      if (!updated.rows[0]) return reply.code(409).send({ message: "Your college is already saved." });
+      return { user: publicUser(updated.rows[0]), message: "Profile completed." };
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+        return reply.code(409).send({ message: "That mobile number or LPU registration number is already used by another account." });
+      }
+      throw error;
+    }
+  });
+
   app.post("/v1/auth/logout", async (request, reply) => {
     if (request.sessionHash) {
       await pool.query("DELETE FROM auth_sessions WHERE token_hash = $1", [request.sessionHash]);

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { clearAppLock } from "../../lib/app-lock";
 import { setAppToken, useAuthApi } from "../../lib/auth-session";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
+import CompleteProfile from "./complete-profile";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
 import { istDateTime, istDayFullYear, istTimeSeconds, percent, price, tone } from "./format";
 import LockScreen from "./lock-screen";
@@ -116,6 +117,10 @@ export default function AccountPage() {
   const toastId = useRef(0);
   const [privacy, setPrivacy] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  // "Later" on the complete-profile popup hides it until the next visit in this tab.
+  const [profileLater, setProfileLater] = useState(() => {
+    try { return typeof window !== "undefined" && sessionStorage.getItem("xocrisk.profileLater") === "1"; } catch { return false; }
+  });
   // Bumping this remounts the current page so it refetches its own data (championship, chat, notes…).
   const [pageKey, setPageKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -557,6 +562,10 @@ export default function AccountPage() {
       )}
       {editingProfile && (
         <EditProfile data={data} notify={toast} onClose={() => setEditingProfile(false)} onSaved={() => void load().catch(() => {})} />
+      )}
+      {!profileLater && !editingProfile && !ticket && (!data.user.college || !data.user.mobile) && (
+        <CompleteProfile data={data} notify={toast} onSaved={() => void load().catch(() => {})}
+          onLater={() => { setProfileLater(true); try { sessionStorage.setItem("xocrisk.profileLater", "1"); } catch { /* private mode */ } }} />
       )}
       <LockScreen name={firstName === "Trader" ? "" : firstName} onSignOut={() => void logout()} />
     </div>
