@@ -116,7 +116,7 @@ export default function AuthExperience({ initialTab }: { initialTab: Tab }) {
             <div>
               <h2 className="pitch">Real market rules. Pretend money.</h2>
               <p className="pitch-sub">
-                Every order fills against the order book, with brokerage, STT and GST, the way a real broker does it.
+                Real NSE stocks, real market hours and real order types, with virtual money and feedback on every habit.
                 The only thing you can lose here is a bad habit.
               </p>
             </div>
@@ -132,8 +132,8 @@ export default function AuthExperience({ initialTab }: { initialTab: Tab }) {
                 <dl>
                   <dt>Buy INFY</dt><dd>10 × ₹1,512.40</dd>
                   <dt>Order value</dt><dd>₹15,124.00</dd>
-                  <dt>Charges (simulated)</dt><dd>₹18.42</dd>
-                  <dt>Wallet after trade</dt><dd>₹84,857.58</dd>
+                  <dt>Charges</dt><dd>₹0.00</dd>
+                  <dt>Wallet after trade</dt><dd>₹84,876.00</dd>
                   <dt className="total">Real money at risk</dt><dd className="total">₹0.00</dd>
                 </dl>
                 <div className="slip-foot"><span>XO-24-118932<br />10:42:18 IST</span><span className="barcode" /></div>

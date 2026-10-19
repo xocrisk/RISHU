@@ -5,4 +5,4 @@
 :HL["/_next/static/chunks/04tm3sjv-zfq0.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"sso-callback","h":96,"c":"$Q2"}]]
-0:{"b":"IC7BX1qhZmwJ5l5qhTgHI","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"s_7VjbhYDrBNw5RCS95zQ","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

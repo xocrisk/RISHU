@@ -472,7 +472,7 @@ export function AiView({ data, quotes, indices }: { data: Dashboard; quotes: Map
   return (
     <div className="xq-page narrow">
       <div className="xq-page-head">
-        <h1>XOCRISK AI <span className="xq-badge">Beta</span></h1>
+        <h1>XOCRISK AI</h1>
         {lines.length > 0 && <button className="xq-btn ghost" onClick={() => setLines([])} type="button">Clear chat</button>}
       </div>
       <section className="xq-panel flush xq-ai">
