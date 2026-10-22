@@ -19,8 +19,8 @@ const app = await buildApp({
   config,
   market,
 });
-// The standalone server also serves the static website (apps/web/out) when it has been built.
-const webRoot = config.webRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/out");
+// The standalone server also serves the static website (frontend/out) when it has been built.
+const webRoot = config.webRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../frontend/out");
 if (existsSync(webRoot)) registerStaticWeb(app, webRoot);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

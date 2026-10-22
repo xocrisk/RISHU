@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   cacheComponents: false,
   partialPrefetching: false,
-  // The API (built to apps/api/dist first by turbo) and its server-only libraries stay plain Node modules.
+  // The API (built to backend/dist first by turbo) and its server-only libraries stay plain Node modules.
   transpilePackages: ["@xocrisk/core"],
   serverExternalPackages: ["@xocrisk/api", "fastify", "pg", "nodemailer", "@fastify/cors", "@fastify/rate-limit", "@fastify/formbody", "jose"],
   // Basic hardening for the website: no framing (clickjacking), no MIME sniffing, no referrer leaks off-site,

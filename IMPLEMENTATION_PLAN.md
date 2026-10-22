@@ -8,7 +8,7 @@ This plan translates the supplied PRD into an implementation sequence. The regul
 
 ## Architecture
 
-- **Monorepo:** Turborepo with `apps/web` (Next.js), `apps/mobile` (React Native with Expo), and shared `packages/core` (validation, integer-paise money and fee calculations, API client, design tokens).
+- **Monorepo:** Turborepo with `frontend` (Next.js), `apps/mobile` (React Native with Expo), and shared `packages/core` (validation, integer-paise money and fee calculations, API client, design tokens).
 - **API:** Fastify REST API plus WebSocket endpoints. Keep auth, wallet/ledger, orders, replay, and exchange interfaces distinct so the two market modes cannot accidentally share data sources.
 - **Persistence:** PostgreSQL for users, wallets, immutable ledger entries, orders, fills, fee schedule versions, and audit events. Redis for ephemeral fan-out and leaderboard data.
 - **XO Exchange:** Single-process price-time-priority matching engine with an append-only event log and deterministic replay for recovery. Do not use exchange-derived market data in its synthetic instruments.

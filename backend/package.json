@@ -35,6 +35,10 @@
     "./serverless": {
       "types": "./dist/serverless.d.ts",
       "import": "./dist/serverless.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
     }
   },
   "engines": {

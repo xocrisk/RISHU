@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const exportDirectory = resolve(root, "apps", "web", "out");
+const exportDirectory = resolve(root, "frontend", "out");
 const webDirectory = resolve(root, "www");
 const markerPath = resolve(webDirectory, ".xocrisk-static-export");
 
@@ -31,5 +31,5 @@ if (outputExists) {
 
 await mkdir(webDirectory, { recursive: true });
 await cp(exportDirectory, webDirectory, { recursive: true });
-await writeFile(markerPath, "Generated from apps/web/out. Do not edit manually.\n", "utf8");
+await writeFile(markerPath, "Generated from frontend/out. Do not edit manually.\n", "utf8");
 console.log(`Copied the static Next.js export to ${webDirectory}`);

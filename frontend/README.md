@@ -4,7 +4,7 @@ The Next.js app contains signup, login, and the authenticated practice dashboard
 
 ## Local development
 
-1. Set up PostgreSQL and the API using [the API setup guide](../api/README.md).
+1. Set up PostgreSQL and the API using [the API setup guide](../backend/README.md).
 2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_API_URL`.
 3. From the monorepo root, run `npm run dev` to build the shared core package and start both the API and web app.
 4. Open `http://localhost:3000/signup` or `http://localhost:3000/login`.

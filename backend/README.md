@@ -7,7 +7,7 @@ The Fastify service provides PostgreSQL-backed authentication and practice APIs.
 1. Create a PostgreSQL database.
 2. Copy `.env.example` to `.env`. Set `DATABASE_URL`, `WEB_ORIGIN` (a comma-separated allowlist, for example `http://localhost:3000,http://localhost:5173,https://localhost,capacitor://localhost`), and a strong random `AUTH_SESSION_SECRET` (at least 32 random bytes). Add the deployed website origin when publishing, and keep the session secret on the API only.
 3. Apply the database migrations from the monorepo root with `npm run migrate --workspace @xocrisk/api`.
-4. Copy `apps/web/.env.example` to `apps/web/.env.local` and set `NEXT_PUBLIC_API_URL`.
+4. Copy `frontend/.env.example` to `frontend/.env.local` and set `NEXT_PUBLIC_API_URL`.
 5. Start the web app and API together from the root with `npm run dev`. Turbo builds the shared core package before starting either app.
 
 The API listens on `http://127.0.0.1:4000` by default. `WEB_ORIGIN` must exactly match the web app origin for API CORS.

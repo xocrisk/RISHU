@@ -1,5 +1,5 @@
 // Builds the website as plain static files for the Capacitor mobile app (no /v1 API routes inside).
-// The app talks to the live site's API. This overrides apps/web/.env.local (which points at a local dev API);
+// The app talks to the live site's API. This overrides frontend/.env.local (which points at a local dev API);
 // set XOCRISK_APP_API_URL to build an app against another server.
 import { execSync } from "node:child_process";
 
