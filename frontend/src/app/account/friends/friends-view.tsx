@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, EmptyState, Icon, MyQr, QrScanner, SearchField, UserRow, type IconName } from "./components";
-import { alphabet, createMockFriendsRepository, friendsOf, sectionOf, sortUsers, type FriendsAction, type FriendsRepository, type FriendsState, type User } from "./model";
+import { setScreenSecure } from "../../../lib/screen-security";
+import { alphabet, createMockFriendsRepository, friendsOf, isLiveMessage, sectionOf, sortUsers, type FriendsAction, type FriendsRepository, type FriendsState, type User } from "./model";
 import "./friends.css";
 
 const subscribe = (callback: () => void) => { window.addEventListener("hashchange", callback); return () => window.removeEventListener("hashchange", callback); };
@@ -42,6 +43,14 @@ export default function FriendsView({ scope, base = "friends", createRepository 
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [found, setFound] = useState<{ query: string; user: User | null; error?: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Re-render every minute so chats vanish on screen as they pass 24 hours.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    if (screen !== "thread") return;
+    void setScreenSecure(true);
+    return () => { void setScreenSecure(false); };
+  }, [screen]);
   useEffect(() => {
     let active = true;
     void service.load().then((next) => { if (active) setState(next); }).catch((cause) => { if (active) setLoadError(cause instanceof Error ? cause.message : "Friends couldn't load. Try again."); });
@@ -112,6 +121,7 @@ export default function FriendsView({ scope, base = "friends", createRepository 
   if (!state) return <section className="fg-shell"><p role="status">{loadError || "Loading friends…"}</p>{loadError && <button type="button" className="xq-btn" onClick={() => { setLoadError(""); setLoadAttempt((n) => n + 1); }}>Try again</button>}</section>;
 
   const friends = friendsOf(state);
+  const messages = service.sample ? state.messages : state.messages.filter((m) => isLiveMessage(m, now));
   const needle = query.trim().toLowerCase();
   const filteredFriends = friends.filter((user) => `${user.nickname} ${screen === "select" ? "" : displayId(user)}`.toLowerCase().includes(needle));
   const searchQuery = query.trim();
@@ -144,13 +154,13 @@ export default function FriendsView({ scope, base = "friends", createRepository 
     {screen === "chats" && <>
       <button type="button" className="fg-directory" onClick={() => go("contacts")}><span className="fg-tile"><Icon name="group" /></span><span><strong>Friends & Groups</strong><small>{friends.length} friends · {joined.length} groups</small></span>{incoming.length > 0 && <em>{incoming.length}</em>}<Icon name="chevron" /></button>
       <div className="fg-section-label">RECENT CHATS</div>
-      <div className="fg-list">{[...new Set(state.messages.map((item) => item.thread))].filter((thread) => friends.some((user) => user.id === thread) || joined.some((g) => g.id === thread)).sort((a, b) => (state.messages.filter((m) => m.thread === b).at(-1)?.createdAt ?? "").localeCompare(state.messages.filter((m) => m.thread === a).at(-1)?.createdAt ?? "")).map((thread) => {
+      <div className="fg-list">{[...new Set(messages.map((item) => item.thread))].filter((thread) => friends.some((user) => user.id === thread) || joined.some((g) => g.id === thread)).sort((a, b) => (messages.filter((m) => m.thread === b).at(-1)?.createdAt ?? "").localeCompare(messages.filter((m) => m.thread === a).at(-1)?.createdAt ?? "")).map((thread) => {
         const user = state.users.find((u) => u.id === thread);
         const group = joined.find((g) => g.id === thread);
-        const latest = state.messages.filter((m) => m.thread === thread).at(-1)!;
+        const latest = messages.filter((m) => m.thread === thread).at(-1)!;
         return <button type="button" className="fg-chat-row" key={thread} onClick={() => go(`thread/${thread}`)}><Avatar user={user || { id: thread, nickname: group!.name, avatar: "G" }} /><span><strong>{user?.nickname || group?.name}</strong><small>{latest.text}</small></span><Icon name="chevron" /></button>;
       })}</div>
-      {!state.messages.some((m) => friends.some((u) => u.id === m.thread) || joined.some((g) => g.id === m.thread)) && <EmptyState title="Start a conversation" detail="Find a friend or create a group using +." />}
+      {!messages.some((m) => friends.some((u) => u.id === m.thread) || joined.some((g) => g.id === m.thread)) && <EmptyState title="Start a conversation" detail="Find a friend or create a group using +." />}
       <p className="fg-note">A little company for your market journey.</p>
     </>}
 
@@ -205,8 +215,9 @@ export default function FriendsView({ scope, base = "friends", createRepository 
     {screen === "notices" && <>{joined.map((g) => <article className="fg-notice" key={g.id}><span className="fg-tile"><Icon name="bell" /></span><div><h2>{g.name}</h2><p>{g.notice}</p></div></article>)}{!joined.length && <EmptyState title="No group notices yet" detail="Join a group to see its updates here." />}</>}
     {screen === "thread" && (validThread ? <>
       <p className="fg-subtitle">{threadGroup ? `${threadGroup.members.length} members · ${threadGroup.id}` : threadUser && displayId(threadUser)}</p>
-      <div className="fg-messages" role="log" aria-label={service.sample ? "Sample chat messages" : "Chat messages"}>{state.messages.filter((m) => m.thread === threadId).map((m) => <div key={m.id} className={`fg-message ${m.from === state.me.id ? "mine" : ""}`}><small>{m.from === state.me.id ? "You" : state.users.find((u) => u.id === m.from)?.nickname}</small><p>{m.text}</p></div>)}{!state.messages.some((m) => m.thread === threadId) && <EmptyState title="Say hello" detail="This is the beginning of your conversation." />}</div>
-      <form className="fg-compose" onSubmit={(e) => { e.preventDefault(); void act({ type: "message", thread: threadId, text: message, id: id(), createdAt: new Date().toISOString() }, "Sample message saved.").then((ok) => { if (ok) setMessage(""); }); }}><input aria-label="Message" maxLength={1000} placeholder="Write a message…" value={message} onChange={(e) => setMessage(e.target.value)} /><button type="submit" className="fg-pill" disabled={busy || !message.trim()}>Send</button></form>
+      <p className="fg-ephemeral">Messages disappear 24 hours after they&apos;re sent and can&apos;t be copied or saved.</p>
+      <div className="fg-messages" role="log" aria-label={service.sample ? "Sample chat messages" : "Chat messages"} onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>{messages.filter((m) => m.thread === threadId).map((m) => <div key={m.id} className={`fg-message ${m.from === state.me.id ? "mine" : ""}`}><small>{m.from === state.me.id ? "You" : state.users.find((u) => u.id === m.from)?.nickname}</small><p>{m.text}</p></div>)}{!messages.some((m) => m.thread === threadId) && <EmptyState title="Say hello" detail="This is the beginning of your conversation." />}</div>
+      <form className="fg-compose" onSubmit={(e) => { e.preventDefault(); void act({ type: "message", thread: threadId, text: message, id: id(), createdAt: new Date().toISOString() }, service.sample ? "Sample message saved." : "Message sent.").then((ok) => { if (ok) setMessage(""); }); }}><input aria-label="Message" maxLength={1000} placeholder="Write a message…" value={message} onChange={(e) => setMessage(e.target.value)} /><button type="submit" className="fg-pill" disabled={busy || !message.trim()}>Send</button></form>
     </> : <EmptyState title="Chat unavailable" detail="Add this friend or join the group first." />)}
     <div className="fg-feedback" role="status" aria-live="polite">{status}</div>
     {service.sample && <footer className="fg-footer">Sample conversations and requests stay on this device.</footer>}

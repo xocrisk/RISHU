@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { friendsOf, reduceFriends, seedFriends, sectionOf } from "../src/app/account/friends/model.ts";
+import { friendsOf, isLiveMessage, messageLifetimeMs, reduceFriends, seedFriends, sectionOf } from "../src/app/account/friends/model.ts";
 
 test("friends are sorted naturally; groups initially empty for current user", () => {
   const state = seedFriends();
@@ -48,4 +48,10 @@ test("removing a friend blocks new messages and preserves existing history", () 
   assert.equal(friendsOf(state).length, 7);
   assert.ok(state.messages.some((m) => m.thread === "FR000001"));
   assert.throws(() => reduceFriends(state, { type: "message", thread: "FR000001", text: "Hello", id: "m", createdAt: "2026-01-01" }));
+});
+test("chat messages expire 24 hours after they are sent", () => {
+  const sent = Date.parse("2026-10-25T10:00:00Z");
+  const message = { id: "m", thread: "t", from: "f", text: "hi", createdAt: new Date(sent).toISOString() };
+  assert.equal(isLiveMessage(message, sent + messageLifetimeMs - 1), true);
+  assert.equal(isLiveMessage(message, sent + messageLifetimeMs), false);
 });

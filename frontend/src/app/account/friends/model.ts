@@ -3,6 +3,9 @@ export type FriendRequest = { id: string; from: string; to: string; status: "pen
 export type Friendship = { userA: string; userB: string };
 export type Group = { id: string; name: string; ownerId?: string; members: string[]; notice: string };
 export type Message = { id: string; thread: string; from: string; text: string; createdAt: string };
+/** Chats disappear this long after they're sent (also enforced by Supabase RLS and a scheduled purge). */
+export const messageLifetimeMs = 24 * 60 * 60 * 1000;
+export const isLiveMessage = (message: Message, now: number) => now - Date.parse(message.createdAt) < messageLifetimeMs;
 export type FriendsState = { me: User; users: User[]; requests: FriendRequest[]; friendships: Friendship[]; groups: Group[]; messages: Message[] };
 export type FriendsAction =
   | { type: "request"; userId: string }

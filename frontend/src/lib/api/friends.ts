@@ -2,13 +2,14 @@
 
 import { getSupabaseClient } from "../supabase/client";
 import { ensureSupabaseSession } from "../supabase";
-import type { FriendsRepository, FriendsState, Group, User } from "../../app/account/friends/model";
+import { messageLifetimeMs, type FriendsRepository, type FriendsState, type Group, type Message, type User } from "../../app/account/friends/model";
 
 type Profile = { id: string; nickname: string | null; avatar_url: string | null; public_id: string };
 type RequestRow = { id: string; from_id: string; to_id: string; status: "pending" | "accepted" | "rejected" };
 type MemberRow = { group_id: string; user_id: string; role: string };
 type GroupRow = { id: string; name: string; owner_id: string };
 type NoticeRow = { id: string; group_id: string; body: string; created_at: string };
+type MessageRow = { id: string; thread_type: "direct" | "group"; group_id: string | null; from_id: string; to_id: string | null; body: string; created_at: string };
 const profileFields = "id,nickname,avatar_url,public_id";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -121,6 +122,37 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
   if (!data.length) throw new Error("Only the group owner can remove another member.");
 }
 
+export async function getMessages(meId: string): Promise<Message[]> {
+  // RLS returns only this user's direct chats and the group chats they belong to, and nothing older than 24 hours.
+  const { data, error } = await client().from("messages")
+    .select("id,thread_type,group_id,from_id,to_id,body,created_at")
+    .gt("created_at", new Date(Date.now() - messageLifetimeMs).toISOString())
+    .order("created_at", { ascending: true });
+  if (error) throw friendlyFriendsError(error);
+  return (data as MessageRow[]).map((row) => ({
+    id: row.id,
+    // A direct thread is keyed by the other person; a group thread by the group id.
+    thread: row.thread_type === "group" ? row.group_id! : (row.from_id === meId ? row.to_id! : row.from_id),
+    from: row.from_id,
+    text: row.body,
+    createdAt: row.created_at,
+  }));
+}
+export async function sendMessage(thread: string, text: string): Promise<void> {
+  const me = await currentUser();
+  const body = text.trim();
+  if (!body || body.length > 1000) throw new Error("Enter a message of 1–1000 characters.");
+  if (!uuidPattern.test(thread) || thread === me.id) throw new Error("Open a friend or group chat first.");
+  // A thread id that names a group you're in is a group chat; otherwise it's a direct chat with that friend.
+  const { data: group, error: groupError } = await client().from("groups").select("id").eq("id", thread).maybeSingle();
+  if (groupError) throw friendlyFriendsError(groupError);
+  const row: { thread_type: "direct" | "group"; group_id: string | null; from_id: string; to_id: string | null; body: string } = group
+    ? { thread_type: "group", group_id: thread, from_id: me.id, to_id: null, body }
+    : { thread_type: "direct", group_id: null, from_id: me.id, to_id: thread, body };
+  const { error } = await client().from("messages").insert(row);
+  if (error) throw friendlyFriendsError(error);
+}
+
 export function createSupabaseFriendsRepository(expectedPublicId: string): FriendsRepository {
   return {
     async load(): Promise<FriendsState> {
@@ -130,8 +162,9 @@ export function createSupabaseFriendsRepository(expectedPublicId: string): Frien
       const own = (await profiles([me.id]))[0];
       if (!own) throw new Error("Your profile is unavailable. Complete XOCRISK sign-in first.");
       if (own.publicId !== expectedPublicId) throw new Error("Your Supabase account doesn't match this trading account. Sign out and sign in with the same account.");
-      const [friends, groups, requests] = await Promise.all([
+      const [friends, groups, requests, messages] = await Promise.all([
         getFriends(), getMyGroups(), client().from("friend_requests").select("id,from_id,to_id,status").order("created_at", { ascending: false }),
+        getMessages(me.id),
       ]);
       if (requests.error) throw friendlyFriendsError(requests.error);
       const rows = requests.data as RequestRow[];
@@ -139,7 +172,7 @@ export function createSupabaseFriendsRepository(expectedPublicId: string): Frien
       const users = [...new Map([...friends, ...related].filter((user) => user.id !== me.id).map((user) => [user.id, user])).values()];
       return { me: own, users, requests: rows.filter((r) => users.some((u) => u.id === (r.from_id === me.id ? r.to_id : r.from_id)))
         .map((r) => ({ id: r.id, from: r.from_id, to: r.to_id, status: r.status })),
-        friendships: friends.map((friend) => ({ userA: me.id, userB: friend.id })), groups, messages: [] };
+        friendships: friends.map((friend) => ({ userA: me.id, userB: friend.id })), groups, messages };
     },
     async dispatch(action) {
       switch (action.type) {
@@ -148,7 +181,7 @@ export function createSupabaseFriendsRepository(expectedPublicId: string): Frien
         case "remove": await removeFriend(action.userId); break;
         case "create-group": await createGroup(action.name, action.members); break;
         case "join-group": throw new Error("Only a group owner can add members. Ask the owner to invite you.");
-        case "message": throw new Error("Messaging isn't connected yet. No message was sent.");
+        case "message": await sendMessage(action.thread, action.text); break;
       }
       return this.load();
     },
@@ -170,6 +203,10 @@ export function createSupabaseFriendsRepository(expectedPublicId: string): Frien
             .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, onChange)
             .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, onChange)
             .on("postgres_changes", { event: "*", schema: "public", table: "group_notices" }, onChange)
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `to_id=eq.${user.id}` }, onChange)
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `from_id=eq.${user.id}` }, onChange)
+            // Group messages carry no recipient id; Realtime still only delivers rows this member may read.
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `thread_type=eq.group` }, onChange)
             .subscribe((status) => {
               if (disposed) return;
               if (status === "SUBSCRIBED") onChange();
