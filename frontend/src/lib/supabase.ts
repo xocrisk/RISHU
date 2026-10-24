@@ -6,34 +6,33 @@ import { getSupabaseClient } from "./supabase/client";
 export { supabaseConfigured } from "./supabase/client";
 export const supabase = getSupabaseClient;
 
-let ensuring: Promise<string | null> | null = null;
+let ensuring: Promise<boolean> | null = null;
 
 /** Make sure there's a Supabase Auth session for the signed-in trader, so Friends & Groups (RLS/Realtime) works.
  *  Email/password logins never get one from the OAuth flow, and an app reinstall wipes a Google user's stored
- *  session; in both cases we mint a fresh one from the existing trading session. Returns null once a session exists,
- *  otherwise a message to show (e.g. the email still needs verifying). */
-export async function ensureSupabaseSession(): Promise<string | null> {
+ *  session; in both cases we mint a fresh one from the existing trading session. Returns true if a session exists. */
+export async function ensureSupabaseSession(): Promise<boolean> {
   const auth = supabase()?.auth;
-  if (!auth) return "Friends & Groups isn't set up yet. Try again later.";
+  if (!auth) return false;
   const existing = await auth.getUser();
-  if (!existing.error && existing.data.user) return null;
+  if (!existing.error && existing.data.user) return true;
   // Dedupe concurrent callers so we only mint and verify one token.
   ensuring ??= mintSupabaseSession(auth).finally(() => { ensuring = null; });
   return ensuring;
 }
 
-async function mintSupabaseSession(auth: SupabaseClient["auth"]): Promise<string | null> {
-  const failed = "Friends & Groups couldn't connect to your account. Check your connection and try again.";
+async function mintSupabaseSession(auth: SupabaseClient["auth"]): Promise<boolean> {
   let response: Response;
   try {
     response = await apiFetch("/v1/auth/supabase-session", { method: "POST", signal: AbortSignal.timeout(20_000) });
   } catch {
-    return failed;
+    return false;
   }
-  const body = await response.json().catch(() => null) as { tokenHash?: string; message?: string } | null;
-  if (!response.ok || !body?.tokenHash) return body?.message || failed;
+  if (!response.ok) return false;
+  const body = await response.json().catch(() => null) as { tokenHash?: string } | null;
+  if (!body?.tokenHash) return false;
   const { error } = await auth.verifyOtp({ type: "magiclink", token_hash: body.tokenHash });
-  return error ? failed : null;
+  return !error;
 }
 
 /** Sends the browser to Google (via Supabase). Comes back to /sso-callback/. */
