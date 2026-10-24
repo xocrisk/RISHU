@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, EmptyState, Icon, MyQr, QrScanner, SearchField, UserRow, type IconName } from "./components";
-import { alphabet, createMockFriendsRepository, friendsOf, sectionOf, sortUsers, type FriendsAction, type FriendsRepository, type FriendsState } from "./model";
+import { alphabet, createMockFriendsRepository, friendsOf, sectionOf, sortUsers, type FriendsAction, type FriendsRepository, type FriendsState, type User } from "./model";
 import "./friends.css";
 
 const subscribe = (callback: () => void) => { window.addEventListener("hashchange", callback); return () => window.removeEventListener("hashchange", callback); };
@@ -10,9 +10,10 @@ const snapshot = () => window.location.hash.replace(/^#friends\/?/, "") || "chat
 const screens = new Set(["chats", "contacts", "groups", "add", "requests", "search-groups", "select", "name", "qr", "scan", "notices", "thread"]);
 const titles: Record<string, string> = { chats: "Chats", contacts: "Friends", groups: "Friends", add: "Add Friends", requests: "New Friends", "search-groups": "Search Group", select: "Select Friends", name: "Create Group", qr: "My QR Code", scan: "Scan to add", notices: "Group Notice", thread: "Chat" };
 const id = () => crypto.randomUUID();
+const displayId = (user: User) => user.publicId ?? user.id;
 
-export default function FriendsView({ scope, repository }: { scope: string; repository?: FriendsRepository }) {
-  const service = useMemo(() => repository ?? createMockFriendsRepository(scope), [repository, scope]);
+export default function FriendsView({ scope, createRepository = createMockFriendsRepository }: { scope: string; createRepository?: (scope: string) => FriendsRepository }) {
+  const service = useMemo(() => createRepository(scope), [createRepository, scope]);
   const [state, setState] = useState<FriendsState | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -31,11 +32,31 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
   const heading = useRef<HTMLHeadingElement>(null);
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [found, setFound] = useState<{ query: string; user: User | null; error?: string } | null>(null);
   useEffect(() => {
     let active = true;
-    void service.load().then((next) => { if (active) setState(next); }).catch(() => { if (active) setLoadError("Friends couldn't load. Try again."); });
+    void service.load().then((next) => { if (active) setState(next); }).catch((cause) => { if (active) setLoadError(cause instanceof Error ? cause.message : "Friends couldn't load. Try again."); });
     return () => { active = false; };
   }, [service, loadAttempt]);
+  useEffect(() => {
+    let active = true;
+    // Reload on live request/friendship/group changes so the New Friends badge stays current.
+    const stop = service.subscribe?.(
+      () => { void service.load().then((next) => { if (active) setState(next); }).catch(() => { /* Keep the last good state; the next action reports errors. */ }); },
+      (cause) => { if (active) setStatus(cause.message); },
+    );
+    return () => { active = false; stop?.(); };
+  }, [service]);
+  useEffect(() => {
+    const value = query.trim();
+    if (screen !== "add" || !service.searchUser || !value) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      service.searchUser!(value).then((user) => { if (active) setFound({ query: value, user }); },
+        (cause: Error) => { if (active) setFound({ query: value, user: null, error: cause.message }); });
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [screen, query, service]);
   useEffect(() => {
     heading.current?.focus();
   }, [route]);
@@ -59,6 +80,14 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
     catch (cause) { setStatus(cause instanceof Error ? cause.message : "Something went wrong. Try again."); return false; }
     finally { setBusy(false); }
   }
+  async function requestByPublicId(publicId: string) {
+    if (!service.searchUser) return act({ type: "request", userId: publicId }, "QR scanned. Friend request sent.");
+    try {
+      const user = await service.searchUser(publicId);
+      if (!user) { setStatus("No XOCRISK user has this ID."); return false; }
+      return act({ type: "request", userId: user.id }, `QR scanned. Request sent to ${user.nickname}.`);
+    } catch (cause) { setStatus(cause instanceof Error ? cause.message : "Couldn't look up this ID. Try again."); return false; }
+  }
   async function copy(value: string) {
     try { await navigator.clipboard.writeText(value); setStatus("User ID copied."); }
     catch { setStatus("Couldn't copy. Press and hold the ID to copy it manually."); }
@@ -74,7 +103,13 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
 
   const friends = friendsOf(state);
   const needle = query.trim().toLowerCase();
-  const filteredFriends = friends.filter((user) => `${user.nickname} ${screen === "select" ? "" : user.id}`.toLowerCase().includes(needle));
+  const filteredFriends = friends.filter((user) => `${user.nickname} ${screen === "select" ? "" : displayId(user)}`.toLowerCase().includes(needle));
+  const searchQuery = query.trim();
+  const searching = !!service.searchUser && !!searchQuery && found?.query !== searchQuery;
+  const isFriend = (user: User) => friends.some((f) => f.id === user.id);
+  const candidates = service.searchUser && searchQuery
+    ? (!searching && found?.user && !isFriend(found.user) ? [found.user] : [])
+    : state.users.filter((user) => !isFriend(user) && displayId(user).toLowerCase().includes(needle));
   const joined = state.groups.filter((group) => group.members.includes(state.me.id));
   const incoming = state.requests.filter((request) => request.to === state.me.id && request.status === "pending");
   const outgoing = state.requests.filter((request) => request.from === state.me.id && request.status === "pending");
@@ -85,7 +120,7 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
   const actionButton = (label: string, icon: IconName, onClick: () => void) => <button key={label} type="button" onClick={onClick}><span><Icon name={icon} /></span>{label}</button>;
 
   return <section className="fg-shell" aria-label="Friends and groups">
-    <div className="fg-kicker">YOUR TRADING CIRCLE <span>Sample data</span></div>
+    <div className="fg-kicker">YOUR TRADING CIRCLE {service.sample && <span>Sample data</span>}</div>
     <header className="fg-header">
       {screen !== "chats" && <button type="button" className="fg-icon-btn" aria-label="Back" onClick={back}><Icon name="back" /></button>}
       <h1 tabIndex={-1} ref={heading}>{screen === "thread" ? threadGroup?.name || threadUser?.nickname || "Chat" : titles[screen]}</h1>
@@ -126,14 +161,15 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
     </>}
     {screen === "add" && <>
       <SearchField value={query} onChange={setQuery} placeholder="Search User ID" />
-      <div className="fg-ownid">My ID: <code>{state.me.id}</code><button type="button" className="fg-icon-btn" aria-label="Copy my user ID" onClick={() => void copy(state.me.id)}><Icon name="copy" /></button></div>
+      <div className="fg-ownid">My ID: <code>{displayId(state.me)}</code><button type="button" className="fg-icon-btn" aria-label="Copy my user ID" onClick={() => void copy(displayId(state.me))}><Icon name="copy" /></button></div>
       <div className="fg-quick-actions">{actionButton("My QR Code", "qr", () => go("qr"))}{actionButton("Scan to add", "scan", () => go("scan"))}{actionButton("Invite Friends", "share", () => void invite())}</div>
       <div className="fg-section-label">{query ? "SEARCH RESULTS" : "PEOPLE YOU MAY KNOW"}</div>
-      {sortUsers(state.users.filter((user) => !friends.some((f) => f.id === user.id) && user.id.toLowerCase().includes(needle))).map((user) => {
+      {searching && <p className="fg-subtitle" role="status">Searching…</p>}
+      {sortUsers(candidates).map((user) => {
         const pending = state.requests.find((r) => r.status === "pending" && (r.from === user.id && r.to === state.me.id || r.from === state.me.id && r.to === user.id));
         return <UserRow key={user.id} user={user}>{pending?.to === state.me.id ? <button type="button" className="fg-text-btn" onClick={() => go("requests")}>Respond</button> : <button type="button" className="fg-pill" disabled={busy || !!pending} onClick={() => void act({ type: "request", userId: user.id }, `Request sent to ${user.nickname}.`)}>{pending ? "Pending" : "Add"}</button>}</UserRow>;
       })}
-      {query && !state.users.some((user) => !friends.some((f) => f.id === user.id) && user.id.toLowerCase().includes(needle)) && <EmptyState title="No new users found" detail="Try a sample ID such as FR000011. Existing friends are in Friends." />}
+      {searchQuery && !searching && !candidates.length && <EmptyState title="No new users found" detail={service.sample ? "Try a sample ID such as FR000011. Existing friends are in Friends." : found?.error || "Check the ID and try again. Existing friends are in Friends."} />}
     </>}
     {screen === "requests" && <>
       <p className="fg-subtitle">A new connection starts with a hello.</p>
@@ -145,7 +181,7 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
       <SearchField value={query} onChange={setQuery} placeholder="Search Group name or ID" />
       <div className="fg-section-label">DISCOVER GROUPS</div>
       {state.groups.filter((g) => `${g.name} ${g.id}`.toLowerCase().includes(needle)).map((group) => <UserRow key={group.id} user={{ id: group.id, nickname: group.name, avatar: "G" }}>{group.members.includes(state.me.id) ? <button type="button" className="fg-text-btn" onClick={() => go(`thread/${group.id}`)}>Open</button> : <button type="button" className="fg-pill" disabled={busy} onClick={() => void act({ type: "join-group", groupId: group.id }, `Joined ${group.name}.`)}>Join</button>}</UserRow>)}
-      {!state.groups.some((g) => `${g.name} ${g.id}`.toLowerCase().includes(needle)) && <EmptyState title="No groups found" detail="Try Group 1 or GR000001." />}
+      {!state.groups.some((g) => `${g.name} ${g.id}`.toLowerCase().includes(needle)) && <EmptyState title="No groups found" detail={service.sample ? "Try Group 1 or GR000001." : "Ask a group owner to add you."} />}
     </>}
     {screen === "select" && <>
       <SearchField value={query} onChange={setQuery} placeholder="Search Nickname" />
@@ -153,16 +189,16 @@ export default function FriendsView({ scope, repository }: { scope: string; repo
       <div className="fg-selection"><div>{alphabet.filter((letter) => filteredFriends.some((u) => sectionOf(u.nickname) === letter)).map((letter) => <section key={letter} id={`fg-letter-${letter}`}><h2 className="fg-section-label">{letter}</h2>{filteredFriends.filter((u) => sectionOf(u.nickname) === letter).map((user) => <label className="fg-row fg-select-row" key={user.id}><input type="checkbox" checked={selected.includes(user.id)} onChange={(e) => setSelected((current) => e.target.checked ? [...current, user.id] : current.filter((value) => value !== user.id))} /><Avatar user={user} /><span>{user.nickname}</span></label>)}</section>)}{!filteredFriends.length && <EmptyState title="No friends found" detail="Try another nickname or add friends first." />}</div>
         <nav className="fg-alphabet" aria-label="Jump to letter">{alphabet.map((letter) => <button key={letter} type="button" disabled={!filteredFriends.some((u) => sectionOf(u.nickname) === letter)} aria-label={`Jump to ${letter}`} onClick={() => document.getElementById(`fg-letter-${letter}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{letter}</button>)}</nav></div>
     </>}
-    {screen === "name" && <form className="fg-group-form" onSubmit={(event) => { event.preventDefault(); const groupId = `GR${id().replaceAll("-", "").slice(0, 8).toUpperCase()}`; void act({ type: "create-group", name: groupName, members: selected, id: groupId }, "Group created.").then((ok) => { if (ok) { setSelected([]); setGroupName(""); go(`thread/${groupId}`); } }); }}><span className="fg-group-symbol"><Icon name="group" /></span><label htmlFor="fg-group-name">Group name</label><input autoFocus id="fg-group-name" maxLength={50} placeholder="Give your group a name" value={groupName} onChange={(e) => setGroupName(e.target.value)} /><p>{selected.length} friends selected</p><div className="fg-selected-avatars">{friends.filter((u) => selected.includes(u.id)).map((user) => <Avatar key={user.id} user={user} />)}</div><button type="submit" className="xq-btn primary" disabled={busy || !groupName.trim() || !selected.length}>Create Group</button>{!selected.length && <button type="button" className="fg-text-btn" onClick={() => go("select")}>Select friends first</button>}</form>}
-    {screen === "qr" && <MyQr uid={state.me.id} />}
-    {screen === "scan" && <QrScanner onScan={(uid) => { go("add"); void act({ type: "request", userId: uid }, "QR scanned. Friend request sent."); }} />}
+    {screen === "name" && <form className="fg-group-form" onSubmit={(event) => { event.preventDefault(); const groupId = `GR${id().replaceAll("-", "").slice(0, 8).toUpperCase()}`; void act({ type: "create-group", name: groupName, members: selected, id: groupId }, "Group created.").then((ok) => { if (ok) { setSelected([]); setGroupName(""); go(service.sample ? `thread/${groupId}` : "groups"); } }); }}><span className="fg-group-symbol"><Icon name="group" /></span><label htmlFor="fg-group-name">Group name</label><input autoFocus id="fg-group-name" maxLength={50} placeholder="Give your group a name" value={groupName} onChange={(e) => setGroupName(e.target.value)} /><p>{selected.length} friends selected</p><div className="fg-selected-avatars">{friends.filter((u) => selected.includes(u.id)).map((user) => <Avatar key={user.id} user={user} />)}</div><button type="submit" className="xq-btn primary" disabled={busy || !groupName.trim() || !selected.length}>Create Group</button>{!selected.length && <button type="button" className="fg-text-btn" onClick={() => go("select")}>Select friends first</button>}</form>}
+    {screen === "qr" && <MyQr uid={displayId(state.me)} />}
+    {screen === "scan" && <QrScanner onScan={(uid) => { go("add"); void requestByPublicId(uid); }} />}
     {screen === "notices" && <>{joined.map((g) => <article className="fg-notice" key={g.id}><span className="fg-tile"><Icon name="bell" /></span><div><h2>{g.name}</h2><p>{g.notice}</p></div></article>)}{!joined.length && <EmptyState title="No group notices yet" detail="Join a group to see its updates here." />}</>}
     {screen === "thread" && (validThread ? <>
-      <p className="fg-subtitle">{threadGroup ? `${threadGroup.members.length} members · ${threadGroup.id}` : threadUser?.id}</p>
-      <div className="fg-messages" role="log" aria-label="Sample chat messages">{state.messages.filter((m) => m.thread === threadId).map((m) => <div key={m.id} className={`fg-message ${m.from === state.me.id ? "mine" : ""}`}><small>{m.from === state.me.id ? "You" : state.users.find((u) => u.id === m.from)?.nickname}</small><p>{m.text}</p></div>)}{!state.messages.some((m) => m.thread === threadId) && <EmptyState title="Say hello" detail="This is the beginning of your conversation." />}</div>
+      <p className="fg-subtitle">{threadGroup ? `${threadGroup.members.length} members · ${threadGroup.id}` : threadUser && displayId(threadUser)}</p>
+      <div className="fg-messages" role="log" aria-label={service.sample ? "Sample chat messages" : "Chat messages"}>{state.messages.filter((m) => m.thread === threadId).map((m) => <div key={m.id} className={`fg-message ${m.from === state.me.id ? "mine" : ""}`}><small>{m.from === state.me.id ? "You" : state.users.find((u) => u.id === m.from)?.nickname}</small><p>{m.text}</p></div>)}{!state.messages.some((m) => m.thread === threadId) && <EmptyState title="Say hello" detail="This is the beginning of your conversation." />}</div>
       <form className="fg-compose" onSubmit={(e) => { e.preventDefault(); void act({ type: "message", thread: threadId, text: message, id: id(), createdAt: new Date().toISOString() }, "Sample message saved.").then((ok) => { if (ok) setMessage(""); }); }}><input aria-label="Message" maxLength={1000} placeholder="Write a message…" value={message} onChange={(e) => setMessage(e.target.value)} /><button type="submit" className="fg-pill" disabled={busy || !message.trim()}>Send</button></form>
     </> : <EmptyState title="Chat unavailable" detail="Add this friend or join the group first." />)}
     <div className="fg-feedback" role="status" aria-live="polite">{status}</div>
-    <footer className="fg-footer">Sample conversations and requests stay on this device.</footer>
+    {service.sample && <footer className="fg-footer">Sample conversations and requests stay on this device.</footer>}
   </section>;
 }

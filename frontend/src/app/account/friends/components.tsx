@@ -28,7 +28,7 @@ export function EmptyState({ title, detail, children }: { title: string; detail?
   return <div className="fg-empty"><div className="fg-empty-art" aria-hidden="true"><Icon name="chat" /><span><Icon name="group" /></span></div><h2>{title}</h2>{detail && <p>{detail}</p>}{children}</div>;
 }
 export function UserRow({ user, children, onClick }: { user: User; children?: ReactNode; onClick?: () => void }) {
-  const body = <><Avatar user={user} /><span className="fg-row-copy"><strong>{user.nickname}</strong><small>{user.id}</small></span></>;
+  const body = <><Avatar user={user} /><span className="fg-row-copy"><strong>{user.nickname}</strong><small>{user.publicId ?? user.id}</small></span></>;
   return <div className="fg-row">{onClick ? <button type="button" className="fg-user-button" onClick={onClick}>{body}</button> : body}{children}</div>;
 }
 export function MyQr({ uid }: { uid: string }) {

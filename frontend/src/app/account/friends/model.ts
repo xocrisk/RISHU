@@ -72,6 +72,8 @@ export function reduceFriends(state: FriendsState, action: FriendsAction): Frien
 
 /** Implement this interface with authenticated API calls when connecting the backend. */
 export interface FriendsRepository {
+  /** True for the local placeholder repository; the UI labels its content as sample data. */
+  sample?: boolean;
   load(): Promise<FriendsState>;
   dispatch(action: FriendsAction): Promise<FriendsState>;
   searchUser?: (publicId: string) => Promise<User | null>;
@@ -88,6 +90,7 @@ export function createMockFriendsRepository(scope: string): FriendsRepository {
   const key = `xocrisk.friends.mock.v1:${scope}`;
   let state = seedFriends();
   return {
+    sample: true,
     async load() {
       try {
         const raw = localStorage.getItem(key);

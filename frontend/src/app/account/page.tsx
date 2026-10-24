@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { clearAppLock } from "../../lib/app-lock";
 import { markSignedIn, preferencesJustChanged, savePreferences, setAppToken, useAuthApi } from "../../lib/auth-session";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
+import { createSupabaseFriendsRepository } from "../../lib/api/friends";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import FriendsView from "./friends/friends-view";
 import CompleteProfile from "./complete-profile";
@@ -561,7 +562,7 @@ export default function AccountPage() {
           {tab === "analytics" && <AnalyticsView data={data} quotes={quotes} />}
           {tab === "trends" && <TrendsView data={data} onOpen={openStock} onTrade={trade} />}
           {tab === "championship" && <ChampionshipView notify={toast} onChanged={() => void load().catch(() => {})} />}
-          {tab === "friends" && <FriendsView scope={data.user.uid} />}
+          {tab === "friends" && <FriendsView scope={data.user.uid} createRepository={createSupabaseFriendsRepository} />}
           {tab === "community" && <CommunityView data={data} notify={toast} />}
           {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
           {tab === "notes" && <NotesView notify={toast} />}
