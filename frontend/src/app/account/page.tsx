@@ -6,6 +6,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { clearAppLock } from "../../lib/app-lock";
 import { markSignedIn, preferencesJustChanged, savePreferences, setAppToken, useAuthApi } from "../../lib/auth-session";
 import { clearDashboardSnapshot, readDashboardSnapshot, saveDashboardSnapshot, takePrefetchedDashboard } from "../../lib/dashboard-cache";
+import { getSupabaseClient } from "../../lib/supabase/client";
+import FriendsView from "./friends/friends-view";
 import CompleteProfile from "./complete-profile";
 import { AiView, ChampionshipView, CommunityView, NotesView } from "./community";
 import { istDateTime, istDayFullYear, istTimeSeconds, percent, price, tone } from "./format";
@@ -41,6 +43,7 @@ const navSections: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "Community", items: [
     { id: "championship", label: "Championship", icon: "M6 3h8v4a4 4 0 01-8 0zM6 5H3v1a3 3 0 003 3M14 5h3v1a3 3 0 01-3 3M10 11v3M7 17h6M8 14h4v3H8z", badge: "LPU" },
+    { id: "friends", label: "Friends & Groups", icon: "M7 9a3 3 0 100-6 3 3 0 000 6M13 4a3 3 0 010 6M1 17c0-5 12-5 12 0M14 13c3 0 5 2 5 4" },
     { id: "community", label: "Community", icon: "M3 4h14v9H8l-4 3v-3H3zM6 8h8M6 10.5h5" },
   ] },
   { title: "Tools", items: [
@@ -105,7 +108,7 @@ function readStarred(): string[] {
 
 function tabFromHash(): Tab {
   if (typeof window === "undefined") return "dashboard";
-  const hash = window.location.hash.slice(1) as Tab;
+  const hash = window.location.hash.slice(1).split("/")[0] as Tab;
   return tabIds.has(hash) ? hash : "dashboard";
 }
 
@@ -278,7 +281,7 @@ export default function AccountPage() {
   }, []);
   useEffect(() => {
     const hash = tab === "dashboard" ? "" : `#${tab}`;
-    if (window.location.hash !== hash) window.history.pushState(null, "", `${window.location.pathname}${hash}`);
+    if (window.location.hash !== hash && !(tab === "friends" && window.location.hash.startsWith("#friends/"))) window.history.pushState(null, "", `${window.location.pathname}${hash}`);
   }, [tab]);
 
   const quotes = useMemo(() => new Map((data?.market.quotes ?? []).map((quote) => [quote.symbol, quote])), [data]);
@@ -296,6 +299,10 @@ export default function AccountPage() {
   const closeTicket = useCallback(() => setTicket(null), []);
 
   function navigate(next: Tab) {
+    if (next === "friends" && tab === "friends") {
+      window.history.pushState(null, "", "#friends/chats");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
     setTab(next);
     setDrawer(false);
     window.scrollTo({ top: 0 });
@@ -361,6 +368,7 @@ export default function AccountPage() {
     setPending(true);
     try {
       await authFetch("/v1/auth/logout", { method: "POST" }).catch(() => undefined);
+      await getSupabaseClient()?.auth.signOut({ scope: "local" });
       clearDashboardSnapshot();
       setAppToken(null);
       markSignedIn(false);
@@ -378,6 +386,7 @@ export default function AccountPage() {
     try {
       const response = await authFetch("/v1/auth/account", { method: "DELETE" });
       if (!response.ok) throw new Error();
+      await getSupabaseClient()?.auth.signOut({ scope: "local" });
       clearDashboardSnapshot();
       setAppToken(null);
       markSignedIn(false);
@@ -552,6 +561,7 @@ export default function AccountPage() {
           {tab === "analytics" && <AnalyticsView data={data} quotes={quotes} />}
           {tab === "trends" && <TrendsView data={data} onOpen={openStock} onTrade={trade} />}
           {tab === "championship" && <ChampionshipView notify={toast} onChanged={() => void load().catch(() => {})} />}
+          {tab === "friends" && <FriendsView scope={data.user.uid} />}
           {tab === "community" && <CommunityView data={data} notify={toast} />}
           {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
           {tab === "notes" && <NotesView notify={toast} />}

@@ -24,10 +24,12 @@ async function finishGoogleLogin(): Promise<string | null> {
   const response = await apiFetch("/v1/auth/supabase", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: data.session.access_token }),
   });
-  // XOCRISK has its own session now; the Supabase one isn't needed in this browser.
-  await auth.signOut({ scope: "local" }).catch(() => undefined);
+  // Retain the Supabase session for RLS-protected Friends & Groups and Realtime.
   const body = await response.json().catch(() => ({})) as { message?: string; token?: string; user?: { email?: string | null } };
-  if (!response.ok || !body.user) return body.message ?? "Google sign-in could not be completed. Try again.";
+  if (!response.ok || !body.user) {
+    await auth.signOut({ scope: "local" }).catch(() => undefined);
+    return body.message ?? "Google sign-in could not be completed. Try again.";
+  }
   if (body.token) setAppToken(body.token);
   markSignedIn(true);
   prefetchDashboard(body.user.email ?? null);

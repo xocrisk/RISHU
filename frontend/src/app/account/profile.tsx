@@ -86,6 +86,7 @@ export function ProfileView({ data, privacy, notify, onPrivacy, onNavigate, onEd
       </Group>
 
       <Group title="Community">
+        <Row hint="Chats, requests and your trading circle" icon={icons.invite} label="Friends & Groups" onClick={() => onNavigate("friends")} />
         <Row hint="Conducted by LPU · ₹99 entry" icon={icons.trophy} label="LPU Championship" onClick={() => onNavigate("championship")} />
         <Row icon={icons.chat} label="Community chat" onClick={() => onNavigate("community")} />
         <Row icon={icons.spark} label="XOCRISK AI" onClick={() => onNavigate("ai")} />
