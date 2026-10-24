@@ -61,7 +61,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: signedInBootScript }} />
       </head>
-      <body className="min-h-full flex flex-col">
+      {/* Tolerate attributes injected on body by browser extensions before hydration. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         {children}
         <ServiceWorkerRegistration />
         <NativeDeepLinks />

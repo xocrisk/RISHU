@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import type { MarketFeed, Quote } from "./market/feed.js";
 import { instruments } from "./market/instruments.js";
-import { inRunningChampionship } from "./community.js";
 
 const initialCash = 100000;
 const orderSchema = {
@@ -227,11 +226,11 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
         [id],
       ),
       pool.query<{
-        cash: string; realized_pnl: string; day_start_value: string; day_start_date: string; leaderboard_opt_in: boolean;
+        cash: string; referral_bonus: string; realized_pnl: string; day_start_value: string; day_start_date: string; leaderboard_opt_in: boolean;
         full_name: string | null; college: string | null; email: string; mobile: string | null; uid: string;
         member_since: Date; previous_login: Date | null; current_login: Date | null; preferences: Record<string, unknown>;
       }>(
-        `SELECT p.cash, p.realized_pnl, p.day_start_value, p.day_start_date::text, u.leaderboard_opt_in, u.full_name, u.college,
+        `SELECT p.cash, p.referral_bonus, p.realized_pnl, p.day_start_value, p.day_start_date::text, u.leaderboard_opt_in, u.full_name, u.college,
            u.email, u.mobile, u.uid, u.created_at AS member_since, u.preferences,
            -- The newest session is this visit; the one before it is the last login.
            (SELECT created_at FROM auth_sessions s WHERE s.user_id = u.id ORDER BY created_at DESC OFFSET 1 LIMIT 1) AS previous_login,
@@ -257,7 +256,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
       ),
       pool.query<{ user_id: string; display_name: string; cash: string; symbol: string | null; quantity: number | null; average_cost: string | null }>(
         `SELECT u.id AS user_id, COALESCE(NULLIF(u.full_name, ''), 'XOCRISK learner') AS display_name,
-          p.cash, h.symbol, h.quantity, h.average_cost
+          (p.cash - p.referral_bonus) AS cash, h.symbol, h.quantity, h.average_cost
          FROM users u JOIN practice_portfolios p ON p.user_id = u.id
          LEFT JOIN practice_holdings h ON h.user_id = u.id
          WHERE u.leaderboard_opt_in = TRUE AND u.college IS NOT NULL
@@ -334,7 +333,7 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
       },
       portfolio: {
         totalValue: portfolioValueNow, dayChange, dayChangePercent, availableCash,
-        cash, investedValue,
+        cash, investedValue, referralBonus: Number(data.referral_bonus),
         unrealizedPnl: money(holdings.reduce((total, holding) => total + holding.unrealizedPnl, 0)),
         realizedPnl: Number(data.realized_pnl),
         trend: snapshots.rows.map((snapshot) => ({ value: Number(snapshot.portfolio_value), time: snapshot.created_at })),
@@ -476,32 +475,5 @@ export async function registerPracticeRoutes(app: FastifyInstance, pool: Pool, m
     return { leaderboardOptIn: request.body.enabled };
   });
 
-  app.post("/v1/practice/reset", async (request, reply) => {
-    const id = userId(request);
-    if (!id) return reply.code(401).send({ message: "Sign in to continue." });
-    // A reset would wipe out losses, so it isn't allowed while a championship you're in is running.
-    const championship = await inRunningChampionship(pool, id);
-    if (championship) return reply.code(400).send({ message: `You can't reset your portfolio while ${championship} is running.` });
-    await ensurePortfolio(pool, id);
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT user_id FROM practice_portfolios WHERE user_id = $1 FOR UPDATE", [id]);
-      await client.query("DELETE FROM practice_orders WHERE user_id = $1", [id]);
-      await client.query("DELETE FROM practice_holdings WHERE user_id = $1", [id]);
-      await client.query("DELETE FROM practice_portfolio_snapshots WHERE user_id = $1", [id]);
-      await client.query(
-        "UPDATE practice_portfolios SET cash = $2, realized_pnl = 0, day_start_value = $2, day_start_date = CURRENT_DATE, updated_at = now() WHERE user_id = $1",
-        [id, initialCash],
-      );
-      await recordSnapshot(client, id, "portfolio-reset", pricesOf(await market.list()));
-      await client.query("COMMIT");
-      return { message: "Practice portfolio reset to ₹1,00,000. Your profile and leaderboard preference were kept." };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  });
+
 }

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, type FormEvent, type ReactNode } from "react";
 import { deviceLockAvailable, disableAppLock, enableDeviceLock, lockMode, setPinLock, type LockMode } from "../../lib/app-lock";
 import { isNativeApp, useAuthApi } from "../../lib/auth-session";
+import { InviteFriends } from "./invite-friends";
 import { istDayFullYear } from "./format";
 import type { Dashboard, Tab } from "./types";
 
@@ -46,14 +47,9 @@ export function ProfileView({ data, privacy, notify, onPrivacy, onNavigate, onEd
   const { user } = data;
   const initials = (user.fullName ?? "X").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
-  async function invite() {
-    const url = typeof window === "undefined" ? "" : window.location.origin;
-    const text = `Practice stock trading with ₹1,00,000 virtual money on XOCRISK. Join me! My UID: ${user.uid}`;
-    try {
-      if (navigator.share) await navigator.share({ title: "XOCRISK", text, url });
-      else { await navigator.clipboard.writeText(`${text} ${url}`); notify("ok", "Invite link copied."); }
-    } catch { /* share sheet dismissed */ }
-  }
+  const [inviting, setInviting] = useState(false);
+
+  if (inviting) return <InviteFriends user={user} referralBonus={data.portfolio.referralBonus ?? 0} notify={notify} onBack={() => setInviting(false)} />;
 
   return (
     <div className="xq-page narrow xq-profile">
@@ -76,7 +72,7 @@ export function ProfileView({ data, privacy, notify, onPrivacy, onNavigate, onEd
       <Group title="Account">
         <Row hint="Practice cash, margin and P&L" icon={icons.funds} label="Funds" onClick={() => onNavigate("wallet")} />
         <Row hint="Name and mobile number" icon={icons.user} label="Edit profile" onClick={onEdit} />
-        <Row hint="Leaderboard, watchlist, reset, delete" icon={icons.gear} label="Settings" onClick={() => onNavigate("settings")} />
+        <Row hint="Leaderboard, watchlist, account" icon={icons.gear} label="Settings" onClick={() => onNavigate("settings")} />
       </Group>
 
       {isNativeApp() && <Group title="Security"><AppLockSettings notify={notify} /></Group>}
@@ -102,7 +98,7 @@ export function ProfileView({ data, privacy, notify, onPrivacy, onNavigate, onEd
       </Group>
 
       <Group title="Others">
-        <Row icon={icons.invite} label="Invite friends" onClick={() => void invite()} />
+        <Row icon={icons.invite} hint="Your UID, QR code and scanner" label="Invite friends" onClick={() => setInviting(true)} />
         <Row danger icon={icons.logout} label="Log out" onClick={onLogout} />
       </Group>
     </div>

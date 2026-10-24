@@ -34,7 +34,7 @@ export type Dashboard = {
   market: { dataMode: "DELAYED"; lastUpdatedAt: string | null; status: MarketStatus; quotes: Quote[]; indices: Quote[]; nifty50: string[] };
   portfolio: {
     totalValue: number; dayChange: number; dayChangePercent: number; availableCash: number;
-    cash: number; investedValue: number; unrealizedPnl: number; realizedPnl: number;
+    referralBonus: number; cash: number; investedValue: number; unrealizedPnl: number; realizedPnl: number;
     trend: { value: number; time: string }[];
   };
   holdings: Holding[];

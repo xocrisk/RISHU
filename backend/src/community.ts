@@ -14,7 +14,7 @@ async function portfolioValues(pool: Pool, market: MarketFeed, users: string[]):
   if (!users.length) return new Map();
   const prices = new Map((await market.list()).map((quote) => [quote.symbol, quote.price]));
   const rows = await pool.query<{ user_id: string; cash: string; symbol: string | null; quantity: number | null; average_cost: string | null }>(
-    `SELECT p.user_id, p.cash, h.symbol, h.quantity, h.average_cost
+    `SELECT p.user_id, (p.cash - p.referral_bonus) AS cash, h.symbol, h.quantity, h.average_cost
      FROM practice_portfolios p LEFT JOIN practice_holdings h ON h.user_id = p.user_id
      WHERE p.user_id = ANY($1::uuid[])`,
     [users],

@@ -357,12 +357,6 @@ export default function AccountPage() {
     if (result.ok) toast("ok", enabled ? "You're on the leaderboard." : "You've left the leaderboard.");
   }
 
-  async function resetPortfolio() {
-    if (!window.confirm("Reset your practice portfolio to ₹1,00,000? This removes all holdings, orders and history and can't be undone.")) return;
-    const result = await call("/v1/practice/reset", { method: "POST" }, "The portfolio could not be reset.");
-    if (result.ok) toast("ok", result.message ?? "Portfolio reset.");
-  }
-
   async function logout() {
     setPending(true);
     try {
@@ -537,7 +531,7 @@ export default function AccountPage() {
         <main className="xq-main" key={pageKey}>
           {tab === "dashboard" && <DashboardView data={data} holdings={holdings} nifty50={nifty50} onOpen={openStock} onTrade={trade} />}
           {tab === "portfolio" && <PortfolioView data={data} onOpen={openStock} onTrade={trade} quotes={quotes} />}
-          {tab === "wallet" && <div className="xq-page"><FundsView data={data} onReset={() => void resetPortfolio()} pending={pending} /></div>}
+          {tab === "wallet" && <div className="xq-page"><FundsView data={data} /></div>}
           {tab === "watchlist" && (
             <div className="xq-page narrow">
               <div className="xq-page-head"><h1>Watchlist</h1><span className="xq-muted">Tap ☆ to add a stock to My list</span></div>
@@ -568,7 +562,7 @@ export default function AccountPage() {
           )}
           {tab === "settings" && (
             <SettingsView data={data} onClearStarred={() => saveStarred([])} onDelete={() => void requestDeletion()} onLogout={() => void logout()}
-              onReset={() => void resetPortfolio()} onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} starredCount={starred.length} />
+              onToggleLeaderboard={(enabled) => void setLeaderboard(enabled)} pending={pending} starredCount={starred.length} />
           )}
           <p className="xq-footnote">XOCRISK · practice trading with virtual money · NSE prices delayed ~10 minutes · not investment advice</p>
         </main>

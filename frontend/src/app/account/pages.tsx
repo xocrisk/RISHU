@@ -343,7 +343,7 @@ export function AnalyticsView({ data, quotes }: { data: Dashboard; quotes: Map<s
     .map(([label, value]) => ({ label, value, note: portfolio.investedValue ? `${((value / portfolio.investedValue) * 100).toFixed(1)}%` : undefined }));
   const pnlRows = [...holdings].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl).map((h) => ({ label: h.symbol, value: h.unrealizedPnl }));
   const stats = tradeStats(orders);
-  const overall = portfolio.totalValue - rules.initialCash;
+  const overall = portfolio.totalValue - (portfolio.referralBonus ?? 0) - rules.initialCash;
   const trend = portfolio.trend.map((point) => point.value);
 
   return (
@@ -459,7 +459,7 @@ const faqs: [string, string][] = [
   ["Why was my order rejected?", "The usual reasons are: a market order outside market hours, not enough available cash, selling more shares than you hold, or a limit price more than 20% away from the last price. Transactions shows the exact reason."],
   ["What's the difference between market and limit orders?", "A market order fills straight away at the current price. A limit order waits until the price reaches your limit (or better), and can be placed even while the market is closed."],
   ["What are Holdings and Positions?", "Holdings are all the shares you own. Positions are today's trades, netted per stock, with their running profit or loss."],
-  ["How do I start over?", "Go to Wallet or Settings and use Reset portfolio. It returns your balance to ₹1,00,000 and clears holdings, orders and history."],
+  ["Will logging out change my balance?", "No. Sign in to the same account with your mobile number or email to continue with your saved cash, holdings and history. Portfolio reset is unavailable. Holdings still change value with market prices."],
 ];
 
 export function SupportView() {
@@ -480,9 +480,9 @@ export function SupportView() {
 
 /* ------------------------------------------------------------------ Settings */
 
-export function SettingsView({ data, pending, starredCount, onToggleLeaderboard, onClearStarred, onReset, onLogout, onDelete }: {
+export function SettingsView({ data, pending, starredCount, onToggleLeaderboard, onClearStarred, onLogout, onDelete }: {
   data: Dashboard; pending: boolean; starredCount: number;
-  onToggleLeaderboard: (enabled: boolean) => void; onClearStarred: () => void; onReset: () => void; onLogout: () => void; onDelete: () => void;
+  onToggleLeaderboard: (enabled: boolean) => void; onClearStarred: () => void; onLogout: () => void; onDelete: () => void;
 }) {
   const { user } = data;
   return (
@@ -520,10 +520,6 @@ export function SettingsView({ data, pending, starredCount, onToggleLeaderboard,
         <div className="xq-setting">
           <div><b>Log out</b><p>Sign out of XOCRISK on this device.</p></div>
           <button className="xq-btn ghost" disabled={pending} onClick={onLogout} type="button">Log out</button>
-        </div>
-        <div className="xq-setting">
-          <div><b>Reset portfolio</b><p>Back to ₹1,00,000. Removes all holdings, orders and history.</p></div>
-          <button className="xq-btn danger" disabled={pending} onClick={onReset} type="button">Reset</button>
         </div>
         <div className="xq-setting">
           <div><b>Delete account</b><p>Disables sign-in immediately. This can&apos;t be undone.</p></div>

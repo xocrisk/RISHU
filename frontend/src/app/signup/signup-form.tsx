@@ -43,6 +43,7 @@ export default function SignupForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [referralUid, setReferralUid] = useState("");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -165,6 +166,7 @@ export default function SignupForm() {
         ...(isLpu ? { lpuRegistrationNumber: lpu } : {}),
         password,
         adultConsent: true,
+        ...(referralUid.trim() ? { referralUid: referralUid.trim().toUpperCase() } : {}),
       });
       if (!result.success) throw new Error(result.message);
       setPassword("");
@@ -303,6 +305,13 @@ export default function SignupForm() {
         {errorText("password")}
       </div>
 
+      <div className="field">
+        <label htmlFor="su-referral">Inviter UID <span className="hint">(optional)</span></label>
+        <input className="input" id="su-referral" autoCapitalize="characters" autoComplete="off" maxLength={64}
+          value={referralUid} onChange={(event) => setReferralUid(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+          placeholder="Enter your friend's XOCRISK UID" aria-describedby="su-referral-hint" />
+        <p className="hint" id="su-referral-hint">Your friend gets ₹1,000 virtual cash when you create your account. One reward per new account.</p>
+      </div>
       <div className="field">
         <label className="check">
           <input aria-describedby="su-terms-err" aria-invalid={invalid("terms")} checked={terms} id="su-terms" name="terms"

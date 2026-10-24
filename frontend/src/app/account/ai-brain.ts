@@ -20,7 +20,7 @@ const quoteLine = (quote: Quote) =>
 // ---- answers built from the user's own account
 const activeHoldings = ({ data }: AiContext) => data.holdings.filter((holding) => holding.quantity > 0);
 const filledOrders = ({ data }: AiContext) => data.orders.filter((order) => order.status === "filled");
-const totalReturn = ({ data }: AiContext) => ((data.portfolio.totalValue - data.rules.initialCash) / data.rules.initialCash) * 100;
+const totalReturn = ({ data }: AiContext) => ((data.portfolio.totalValue - (data.portfolio.referralBonus ?? 0) - data.rules.initialCash) / data.rules.initialCash) * 100;
 
 const bestAndWorst = (context: AiContext) => {
   const results = context.data.holdings
@@ -121,7 +121,7 @@ const paperTradingIntents: Intent[] = [
   { patterns: [/\bkal\b.*(stock|share|upar|niche|badh|gir|jayega|jaega)|tomorrow.*(stock|share|go up|rise|fall)|(which|kaun ?sa|konsa|kaunsa) (stock|share).*(upar|badhega|jayega|go up|rise)|predict|forecast|next (week|month)? ?(price|move)/],
     answer: "No one can reliably predict which stock will go up tomorrow, and I won't guess. Prices react to news, results and global markets that nobody knows in advance. What you can control: your research, position size and stop-loss. Practise those here; it's virtual money, so mistakes are free." },
   { patterns: [/(balance|paisa|paise|money|cash|fund|amount).*(badha|bada|increase|add|de do|dedo|dalo|daal|zyada|double|top ?up)|(badha|increase|add|top ?up|double).*(balance|cash|money|paisa|fund)|free (money|paisa|cash)/],
-    answer: "I can't change your balance. Every XOCRISK trader gets the same ₹1,00,000 of virtual money so the leaderboard and championship stay fair. If you've run low, you can sell holdings, or use Reset portfolio (Wallet or Settings) to start again from ₹1,00,000." },
+    answer: "Your balance is saved to your account and does not reset on login. New accounts start with ?1,00,000 virtual cash. Earn ?1,000 for each new friend who signs up using your UID. You can also sell holdings to free up cash." },
   { patterns: [/(crore|lakh|profit|munafa).*(real|asli).*(lagau|lagaun|lagana|invest|paisa|money|hoga|karu|karun)|(real|asli).*(me|mein|trading).*(bhi )?(hoga|milega|profit)/],
     answer: "Careful: paper-trading profit does not mean you'll make the same in real trading. Here there's no real fear or greed, orders fill at delayed prices with no slippage, and there are no charges or taxes. Many people who do well on paper lose money at first with real cash. If you go real, start very small (money you can afford to lose), keep the same rules, and scale up only after months of consistent results. This is educational guidance, not investment advice." },
   { patterns: [/weather|mausam|barish|cricket|\bipl\b|movie|film|song|gaana|gana|joke|recipe|khana|politic|election|girlfriend|boyfriend|homework/],
@@ -146,7 +146,7 @@ const paperTradingIntents: Intent[] = [
   { patterns: [/(kitna|kitne|how much).*(virtual|starting|initial|shuru).*(balance|paisa|money|cash)|(balance|paisa|money).*(kitna|kitne) (milega|milta|milenge)|how much (virtual|starting|initial) (balance|money|cash)/],
     answer: ({ data }) => `Every account starts with ${money(data.rules.initialCash)} of virtual money. Right now you have ${money(data.portfolio.availableCash)} available to trade and a total account value of ${money(data.portfolio.totalValue)}.` },
   { patterns: [/(balance|paisa|paise|cash|money|fund).*(khatam|finish|over|zero|exhaust|run out|ran out|nahi bacha|kam ho)|out of (money|cash|funds)/],
-    answer: "If your virtual cash runs out: sell some holdings to free up cash, cancel open buy limit orders (they reserve cash), or use Reset portfolio in Wallet or Settings to start again from ₹1,00,000. Reset clears your holdings and history, and it's blocked while a championship you joined is running." },
+    answer: "If your virtual cash runs out, sell holdings or cancel open buy limit orders to release reserved cash. Portfolio reset is unavailable; logging out and back in keeps your saved portfolio." },
   { patterns: [/\b(choose|select|change|set|apna|khud)\b.*(starting|initial|shuruati)? ?(balance|capital)|starting (balance|capital)/],
     answer: "No, the starting balance is fixed at ₹1,00,000 for everyone. That keeps the leaderboard and the LPU championship fair, since everyone's return is compared from the same start." },
   { patterns: [/demat/],
@@ -184,7 +184,7 @@ const paperTradingIntents: Intent[] = [
   { patterns: [/(aaj|today|todays|today's).*(profit|loss|p ?& ?l|pnl|kamaya|gain|change)|day'?s (p ?& ?l|pnl|change)/],
     answer: ({ data }) => `Today your account is ${signed(data.portfolio.dayChange)} (${percent(data.portfolio.dayChangePercent)}). Total value: ${money(data.portfolio.totalValue)}. Prices refresh about every 10 minutes during market hours.` },
   { patterns: [/(p ?& ?l|pnl|profit|loss).*(calculat|kaise|kese|how|nikala|formula)/],
-    answer: ({ data }) => `P&L calculation:\n• Unrealised P&L = (current price − your average buy price) × shares you still hold\n• Realised P&L = (sell price − average buy price) × shares sold\n• Total return = (account value − ₹1,00,000) ÷ ₹1,00,000\nYours now: unrealised ${signed(data.portfolio.unrealizedPnl)}, realised ${signed(data.portfolio.realizedPnl)}, total ${signed(data.portfolio.totalValue - data.rules.initialCash)}. No charges are deducted on XOCRISK.` },
+    answer: ({ data }) => `P&L calculation:\n• Unrealised P&L = (current price − your average buy price) × shares you still hold\n• Realised P&L = (sell price − average buy price) × shares sold\n• Total return = (account value − ₹1,00,000) ÷ ₹1,00,000\nYours now: unrealised ${signed(data.portfolio.unrealizedPnl)}, realised ${signed(data.portfolio.realizedPnl)}, total ${signed(data.portfolio.totalValue - (data.portfolio.referralBonus ?? 0) - data.rules.initialCash)}. No charges are deducted on XOCRISK.` },
   { patterns: [/(my|meri|mera|mere).*(best|worst|sabse (acchi|achi|buri|kharab|bekar))|(best|worst) trades?|sabse (acchi|achi|buri|kharab) trade/], answer: bestAndWorst },
   { patterns: [/win ?rate|success rate|hit rate|average return|avg return|kitne trades? (profit|jeet)/], answer: winRate },
   { patterns: [/galti|galtiyan|galtiya|mistake|kya galat|went wrong|go wrong|review (my )?trades|trades? review/], answer: tradeReview },
@@ -288,7 +288,7 @@ const intents: Intent[] = [
   { patterns: [/my (portfolio|account|balance|money|cash|funds)|how (am i|i am) doing|how much (money|cash)|my (profit|loss|p&l|pnl)/],
     answer: ({ data }) => {
       const p = data.portfolio;
-      return `Your account value is ${money(p.totalValue)} (${signed(p.totalValue - data.rules.initialCash)} since you started). Available to trade: ${money(p.availableCash)}. Holdings: ${data.holdings.length}, unrealised P&L ${signed(p.unrealizedPnl)}, realised P&L ${signed(p.realizedPnl)}.`;
+      return `Your account value is ${money(p.totalValue)} (${signed(p.totalValue - (p.referralBonus ?? 0) - data.rules.initialCash)} since you started). Available to trade: ${money(p.availableCash)}. Holdings: ${data.holdings.length}, unrealised P&L ${signed(p.unrealizedPnl)}, realised P&L ${signed(p.realizedPnl)}.`;
     } },
   { patterns: [/my uid|what is (my )?uid|\buid\b/], answer: ({ data }) => `Your XOCRISK UID is ${data.user.uid}. It's unique to you: no one else can ever have the same one. In Community chat, people see only your name and UID.` },
 
@@ -299,7 +299,7 @@ const intents: Intent[] = [
     answer: "To sell: go to Portfolio → Holdings and press S next to the stock (or Sell on its Trade page). You can only sell shares you hold. Choose the quantity and order type, then confirm." },
   { patterns: [/cancel (an? |my )?order/], answer: "Open Transactions → Open, then press Cancel next to the order. Only orders that haven't filled yet can be cancelled." },
   { patterns: [/reject/], answer: "Orders are usually rejected because: it was a market order outside 9:15 AM – 3:30 PM IST, you didn't have enough cash, you tried to sell more shares than you hold, or the limit price was more than 20% away from the last price. Transactions shows the exact reason." },
-  { patterns: [/reset/], answer: "Go to Wallet or Settings and press Reset portfolio. It returns your balance to ₹1,00,000 and clears holdings, orders and history. You can't reset while a championship you've joined is running." },
+  { patterns: [/reset/], answer: "Portfolio reset is unavailable. Your cash, holdings and trade history are saved to your account across logins." },
 
   // ---- concepts
   { patterns: [/market (order )?(vs|or|and|versus) limit|limit (order )?(vs|or|and|versus) market|what is (a )?limit order|what is (a )?market order|limit order/],

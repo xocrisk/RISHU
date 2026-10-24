@@ -31,6 +31,7 @@ type SignupBody = {
   lpuRegistrationNumber?: string;
   password: string;
   adultConsent: true;
+  referralUid?: string;
 };
 
 declare module "fastify" {
@@ -59,6 +60,7 @@ const signupSchema = {
       lpuRegistrationNumber: { type: "string", pattern: "^\\d{8}$" },
       password: { type: "string", minLength: 10, maxLength: 128 },
       adultConsent: { const: true },
+      referralUid: { type: "string", pattern: "^[A-Z0-9]{6,64}$" },
     },
   },
 } as const;
@@ -137,6 +139,7 @@ export async function registerAuthRoutes(
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.expires_at > now()
+         AND u.id <> 'd3a00000-0000-4000-8000-000000000001'::uuid
          AND u.deletion_requested_at IS NULL`,
       [tokenHash, sessionLifetimeMs],
     );
@@ -183,6 +186,31 @@ export async function registerAuthRoutes(
           [email, mobile, passwordHash, fullName, college, isLpu ? registrationNumber : null],
         );
         const user = created.rows[0];
+        if (request.body.referralUid) {
+          const inviter = await client.query<{ id: string }>(
+            "SELECT id FROM users WHERE uid = $1 AND deletion_requested_at IS NULL AND adult_consent_at IS NOT NULL AND id <> $2 FOR SHARE",
+            [request.body.referralUid, user.id],
+          );
+          if (!inviter.rows[0]) {
+            await client.query("ROLLBACK");
+            return reply.code(400).send({ message: "Inviter UID was not found. Check it or remove it to continue." });
+          }
+          const inviterId = inviter.rows[0].id;
+          // Signup and reward commit together. A new account can reward only one inviter once.
+          const reward = await client.query(
+            `INSERT INTO referral_rewards (referred_user_id, inviter_user_id)
+             VALUES ($1, $2) ON CONFLICT (referred_user_id) DO NOTHING RETURNING amount`,
+            [user.id, inviterId],
+          );
+          if (reward.rowCount) {
+            await client.query("INSERT INTO practice_portfolios (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", [inviterId]);
+            await client.query(
+              `UPDATE practice_portfolios SET cash = cash + 1000, referral_bonus = referral_bonus + 1000,
+               day_start_value = day_start_value + 1000, updated_at = now() WHERE user_id = $1`,
+              [inviterId],
+            );
+          }
+        }
         const token = newSessionToken();
         const tokenHash = hashSessionToken(token, sessionSecret);
         await client.query(

@@ -20,6 +20,60 @@ function makeApp(pool = {
   return buildApp({ pool, config });
 }
 
+test("portfolio reset endpoint is removed", async () => {
+  const app = await makeApp();
+  try {
+    const response = await app.inject({ method: "POST", url: "/v1/practice/reset" });
+    assert.equal(response.statusCode, 404);
+  } finally { await app.close(); }
+});
+
+for (const scenario of ["valid", "invalid", "already-credited", "credit-failed"]) {
+  test(`signup referral transaction: ${scenario}`, async () => {
+    const statements = [];
+    const user = { id: "123e4567-e89b-42d3-a456-426614174000", email: "new@example.com", mobile: "9876543210", full_name: "New User", college: "University" };
+    const inviter = "123e4567-e89b-42d3-a456-426614174001";
+    const app = await makeApp({
+      query: async () => { throw new Error("Unexpected query outside transaction"); },
+      connect: async () => ({
+        release() {},
+        query: async (sql, values = []) => {
+          statements.push(sql);
+          if (sql.includes("INSERT INTO users")) return { rows: [user] };
+          if (sql.includes("SELECT id FROM users WHERE uid")) {
+            assert.deepEqual(values, ["AB12CD34", user.id]);
+            assert.match(sql, /id <> \$2/);
+            return { rows: scenario === "invalid" ? [] : [{ id: inviter }] };
+          }
+          if (sql.includes("INSERT INTO referral_rewards")) {
+            assert.deepEqual(values, [user.id, inviter]);
+            assert.match(sql, /ON CONFLICT \(referred_user_id\) DO NOTHING/);
+            return { rows: [], rowCount: scenario === "already-credited" ? 0 : 1 };
+          }
+          if (sql.includes("UPDATE practice_portfolios")) {
+            assert.deepEqual(values, [inviter]);
+            assert.match(sql, /cash = cash \+ 1000/);
+            if (scenario === "credit-failed") throw new Error("Simulated credit failure");
+          }
+          return { rows: [] };
+        },
+      }),
+    });
+    try {
+      const response = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: {
+        fullName: "New User", email: user.email, mobile: user.mobile, college: "University",
+        password: "a-long-password", adultConsent: true, referralUid: "AB12CD34",
+      } });
+      assert.equal(response.statusCode, scenario === "invalid" ? 400 : scenario === "credit-failed" ? 500 : 201);
+      const failed = scenario === "invalid" || scenario === "credit-failed";
+      assert.equal(statements.includes("COMMIT"), !failed);
+      assert.equal(statements.includes("ROLLBACK"), failed);
+      assert.equal(statements.filter((sql) => sql.includes("UPDATE practice_portfolios")).length,
+        scenario === "valid" || scenario === "credit-failed" ? 1 : 0);
+    } finally { await app.close(); }
+  });
+}
+
 test("health endpoint is public and does not need database access", async () => {
   const app = await makeApp();
   try {

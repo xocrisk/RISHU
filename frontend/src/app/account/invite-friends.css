@@ -1,0 +1,18 @@
+.xq-invite { display: grid; gap: 24px; padding-bottom: 32px; }
+.xq-invite > .xq-btn { justify-self: start; }
+.xq-invite header h1 { margin: 8px 0; font-size: clamp(28px, 5vw, 38px); letter-spacing: -.04em; }
+.xq-invite p { color: var(--muted); font-size: 14px; line-height: 1.65; margin: 6px 0; }
+.xq-invite-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .15em; color: var(--gold); }
+.xq-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px 20px; border: 1px solid var(--gold-line); border-radius: 20px; background: linear-gradient(145deg, var(--gold-tint), var(--panel) 50%); text-align: center; }
+.xq-invite-avatar { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--gold-soft); color: var(--gold); font-size: 22px; font-weight: 700; }
+.xq-invite h2 { font-size: 18px; margin: 0; }
+.xq-invite-uid { font-size: clamp(21px, 5vw, 28px); font-weight: 700; letter-spacing: .12em; overflow-wrap: anywhere; user-select: all; max-width: 100%; }
+.xq-invite-qr { margin-top: 6px; padding: 4px; border-radius: 14px; background: #fff; color: #111; max-width: 100%; }
+.xq-invite-qr canvas { display: block; max-width: 100%; height: auto !important; border-radius: 10px; }
+.xq-invite-card > .primary { width: min(100%, 320px); min-height: 46px; }
+.xq-invite-scan { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 22px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); }
+.xq-invite-camera, .xq-invite-result { width: 100%; text-align: center; }
+.xq-invite-camera video { display: block; width: 100%; max-height: 340px; border-radius: 12px; background: #111; object-fit: cover; }
+.xq-invite-result { display: grid; justify-items: center; gap: 12px; padding: 20px 0; border-top: 1px solid var(--line); }
+.xq-invite-result small { color: var(--muted); }
+.xq-invite button:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }

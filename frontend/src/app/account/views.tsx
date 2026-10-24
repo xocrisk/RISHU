@@ -337,7 +337,7 @@ export function PositionsView({ orders, quotes, onTrade, onOpen }: {
 
 /* ------------------------------------------------------------------ Funds */
 
-export function FundsView({ data, pending, onReset }: { data: Dashboard; pending: boolean; onReset: () => void }) {
+export function FundsView({ data }: { data: Dashboard }) {
   const { portfolio, rules } = data;
   const used = portfolio.cash - portfolio.availableCash;
   return (
@@ -351,11 +351,12 @@ export function FundsView({ data, pending, onReset }: { data: Dashboard; pending
             <div><dt>Used margin <small>open buy orders</small></dt><dd>{money(used)}</dd></div>
             <div><dt>Available cash</dt><dd>{money(portfolio.cash)}</dd></div>
             <div className="xt-ledger-sep"><dt>Opening balance</dt><dd>{money(rules.initialCash)}</dd></div>
+            <div><dt>Invite rewards <small>virtual cash</small></dt><dd>{money(portfolio.referralBonus ?? 0)}</dd></div>
             <div><dt>Invested <small>at market value</small></dt><dd>{money(portfolio.investedValue)}</dd></div>
             <div><dt>Realised P&amp;L</dt><dd className={tone(portfolio.realizedPnl)}>{signed(portfolio.realizedPnl)}</dd></div>
             <div><dt>Unrealised P&amp;L</dt><dd className={tone(portfolio.unrealizedPnl)}>{signed(portfolio.unrealizedPnl)}</dd></div>
             <div className="xt-ledger-sep"><dt>Account value</dt><dd>{money(portfolio.totalValue)}</dd></div>
-            <div><dt>Overall return</dt><dd className={tone(portfolio.totalValue - rules.initialCash)}>{percent(((portfolio.totalValue - rules.initialCash) / rules.initialCash) * 100)}</dd></div>
+            <div><dt>Overall return</dt><dd className={tone(portfolio.totalValue - (portfolio.referralBonus ?? 0) - rules.initialCash)}>{percent(((portfolio.totalValue - (portfolio.referralBonus ?? 0) - rules.initialCash) / rules.initialCash) * 100)}</dd></div>
           </dl>
         </section>
         <section className="xt-card">
@@ -367,10 +368,7 @@ export function FundsView({ data, pending, onReset }: { data: Dashboard; pending
             <li>Limit prices must be within ±{rules.limitBandPercent}% of the last price.</li>
             <li>No brokerage, taxes or slippage are charged on practice trades.</li>
           </ul>
-          <div className="xt-danger">
-            <div><strong>Reset portfolio</strong><p>Go back to {money(rules.initialCash)}. Removes all holdings, orders and history.</p></div>
-            <button className="xt-btn danger small" disabled={pending} onClick={onReset} type="button">Reset</button>
-          </div>
+          <p className="xt-muted">Your cash, holdings and trade history stay saved when you log out.</p>
         </section>
       </div>
     </div>

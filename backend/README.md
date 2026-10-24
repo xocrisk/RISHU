@@ -22,6 +22,9 @@ Leaderboard participation defaults to off. A user must explicitly opt in before 
 
 ## Authentication behavior
 
+- Portfolio cash, holdings and trade history belong to the account and persist across logout and mobile/email login. Portfolio reset is unavailable.
+- Apply `018_referral_rewards.sql` before deploying referral rewards. Signup accepts an optional `referralUid`; a valid inviter receives ₹1,000 virtual cash in the same transaction as the new account. Each new account rewards one inviter once. Sharing/scanning a UID or logging in does not award cash. Rewards are shown separately from trading returns. Signup currently does not verify phone ownership, so this prevents duplicate account rewards, not multiple registrations with different phone numbers.
+
 - Signup creates an account with email, password, Indian mobile number, college, and explicit 18+/terms consent. Passwords must be at least 10 characters. Passwords and phone numbers are not currently verified by an email or SMS provider.
 - Login accepts the registered email address or Indian mobile number with the account password. Without “Remember me”, the browser cookie is session-only and its API token expires after 12 hours; enabling it extends both to 30 days. Tokens are stored as keyed hashes in `auth_sessions`.
 - The optional Google and Microsoft OIDC providers are enabled by setting each provider's client ID, secret, and exact callback URL. OAuth only signs in an already-linked account; first-time linking requires the existing XOCRISK password. No account is created from provider data.

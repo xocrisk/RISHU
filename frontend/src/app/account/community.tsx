@@ -183,7 +183,7 @@ export function ChampionshipView({ notify, onChanged }: { notify: Notify; onChan
             <li>Open to every XOCRISK trader. Join once; you can&apos;t leave and re-join.</li>
             <li>Your return is measured from your account value at the moment you join.</li>
             <li>Trade NIFTY 500 stocks with your practice money, on NSE hours (9:15 AM – 3:30 PM IST).</li>
-            <li>Portfolio reset is disabled while the championship is live.</li>
+            <li>Your portfolio and trading history are saved permanently; portfolio reset is unavailable.</li>
             <li>Ranking is by percentage return; ties go to whoever joined first.</li>
             <li>Final standings are taken at the closing bell on {istDayFullYear.format(new Date(championship.endsAt))}.</li>
           </ol>
