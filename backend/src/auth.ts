@@ -452,7 +452,8 @@ export async function registerAuthRoutes(
           return reply.code(400).send({ message: "The reset code is invalid or expired." });
         }
         const passwordHash = await hashPassword(request.body.password);
-        await client.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, reset.user_id]);
+        // The code reached this inbox, so the email is verified too.
+        await client.query("UPDATE users SET password_hash = $1, email_verified_at = coalesce(email_verified_at, now()) WHERE id = $2", [passwordHash, reset.user_id]);
         await client.query("DELETE FROM email_otps WHERE email = $1 AND purpose = 'password_reset'", [email]);
         await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [reset.user_id]);
         await client.query("COMMIT");
@@ -531,6 +532,14 @@ export async function registerAuthRoutes(
       }
     }
     if (!user || user.deletion_requested_at) return reply.code(403).send({ message: "This account has been deleted." });
+    // Google proves who owns this email. If the account was opened with an unverified email and password, whoever
+    // registered it is signed out and the password removed, so only the owner keeps access (Forgot password sets a new one).
+    if (!created) {
+      const claimed = await pool.query(
+        "UPDATE users SET email_verified_at = now(), password_hash = NULL WHERE id = $1 AND email_verified_at IS NULL RETURNING id", [user.id],
+      );
+      if (claimed.rowCount) await pool.query("DELETE FROM auth_sessions WHERE user_id = $1", [user.id]);
+    }
 
     const app = isAppClient(request);
     const token = await createSession(pool, user.id, sessionSecret, app ? appSessionLifetimeMs : sessionLifetimeMs);
@@ -549,6 +558,15 @@ export async function registerAuthRoutes(
     if (!user) return reply.code(401).send({ message: "Sign in to XOCRISK first." });
     if (!supabase) return reply.code(503).send({ message: "Friends & Groups isn't set up yet. Try again later." });
     if (!user.email) return reply.code(409).send({ message: "Add a verified email to your account to use Friends & Groups." });
+    // Signup doesn't prove email ownership, and this session acts as that email in Supabase, so only verified
+    // emails (Google sign-in or a completed password reset) get one.
+    const verified = await pool.query<{ email_verified_at: Date | null }>("SELECT email_verified_at FROM users WHERE id = $1", [user.id]);
+    if (!verified.rows[0]?.email_verified_at) {
+      return reply.code(403).send({
+        code: "email_unverified",
+        message: "Verify your email to use Friends & Groups: log out and continue with Google, or use Forgot password on the login page.",
+      });
+    }
 
     // Make sure the Supabase user exists and is confirmed (idempotent: 422 just means it's already there).
     await mirrorUserToSupabase(supabase, user, request.log);
@@ -611,7 +629,8 @@ export async function registerAuthRoutes(
 
     const passwordHash = await hashPassword(request.body.password);
     const updated = await pool.query<{ id: string }>(
-      "UPDATE users SET password_hash = $2 WHERE lower(email) = $1 AND deletion_requested_at IS NULL RETURNING id", [email, passwordHash],
+      // The link reached this inbox, so the email is verified too.
+      "UPDATE users SET password_hash = $2, email_verified_at = coalesce(email_verified_at, now()) WHERE lower(email) = $1 AND deletion_requested_at IS NULL RETURNING id", [email, passwordHash],
     );
     const user = updated.rows[0];
     if (!user) return reply.code(404).send({ message: "No XOCRISK account uses that email." });

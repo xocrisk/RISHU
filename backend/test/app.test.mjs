@@ -465,3 +465,63 @@ test("password reset replaces the password, consumes its code, and revokes sessi
     await app.close();
   }
 });
+
+for (const verified of [false, true]) {
+  test(`Supabase session for Friends requires a verified email (${verified ? "verified" : "unverified"})`, async (t) => {
+    const user = { id: "123e4567-e89b-42d3-a456-426614174000", email: "trader@example.com", mobile: null, full_name: "Trader", college: null };
+    const app = await buildApp({
+      pool: {
+        query: async (sql) => {
+          if (sql.includes("FROM auth_sessions s")) return { rows: [{ ...user, renew: false }] };
+          if (sql.includes("SELECT email_verified_at")) return { rows: [{ email_verified_at: verified ? new Date() : null }] };
+          throw new Error(`Unexpected query: ${sql}`);
+        },
+      },
+      config: { ...config, supabase: { url: "https://auth.example", secretKey: "test-key" } },
+    });
+    const calls = [];
+    t.mock.method(globalThis, "fetch", async (url) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/admin/generate_link")) return Response.json({ hashed_token: "hashed-token" });
+      return new Response(null, { status: 422 });
+    });
+    try {
+      const response = await app.inject({ method: "POST", url: "/v1/auth/supabase-session", headers: { cookie: "xocrisk_session=testsessiontoken" } });
+      if (verified) {
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.json().tokenHash, "hashed-token");
+      } else {
+        assert.equal(response.statusCode, 403);
+        assert.equal(response.json().code, "email_unverified");
+        assert.deepEqual(calls, [], "No Supabase link may be minted for an unverified email");
+      }
+    } finally { await app.close(); }
+  });
+}
+
+test("Google sign-in claims an unverified account: password removed and old sessions signed out", async (t) => {
+  const statements = [];
+  const user = { id: "123e4567-e89b-42d3-a456-426614174000", email: "owner@example.com", mobile: null, full_name: "Owner", college: null, deletion_requested_at: null };
+  const app = await buildApp({
+    pool: {
+      query: async (sql, values = []) => {
+        statements.push(sql);
+        if (sql.includes("FROM users WHERE lower(email)")) return { rows: [user] };
+        if (sql.includes("password_hash = NULL")) { assert.match(sql, /email_verified_at IS NULL/); assert.deepEqual(values, [user.id]); return { rows: [{ id: user.id }], rowCount: 1 }; }
+        if (sql.includes("DELETE FROM auth_sessions")) return { rows: [], rowCount: 2 };
+        if (sql.includes("INSERT INTO auth_sessions")) return { rows: [] };
+        return { rows: [] };
+      },
+    },
+    config: { ...config, supabase: { url: "https://auth.example", secretKey: "test-key" } },
+  });
+  t.mock.method(globalThis, "fetch", async () => Response.json({ email: user.email, email_confirmed_at: new Date().toISOString() }));
+  try {
+    const response = await app.inject({ method: "POST", url: "/v1/auth/supabase", payload: { accessToken: "test-access-token-long-enough" } });
+    assert.equal(response.statusCode, 200);
+    const claim = statements.findIndex((sql) => sql.includes("password_hash = NULL"));
+    const signOut = statements.findIndex((sql) => sql.includes("DELETE FROM auth_sessions"));
+    assert.ok(claim >= 0 && signOut > claim, "Other sessions are removed after the claim");
+    assert.ok(statements.findIndex((sql) => sql.includes("INSERT INTO auth_sessions")) > signOut, "The new session survives");
+  } finally { await app.close(); }
+});
