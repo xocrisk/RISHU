@@ -281,18 +281,18 @@ export async function registerAuthRoutes(
           const token = newSessionToken();
           const tokenHash = hashSessionToken(token, sessionSecret);
           const rememberMe = request.body.rememberMe === true;
+          const native = isAppClient(request);
           await client.query(
             "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
-            [user.id, tokenHash, new Date(Date.now() + (rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs))],
+            [user.id, tokenHash, new Date(Date.now() + (native ? appSessionLifetimeMs : rememberMe ? sessionLifetimeMs : temporarySessionLifetimeMs))],
           );
           await client.query("COMMIT");
           return reply
             .header("Set-Cookie", [
               sessionCookie(token, environment, rememberMe),
-              expiredSessionCookie(environment),
               oauthLinkCookie("", environment, true),
             ])
-            .send({ user: publicUser(user), providerLinked: Boolean(pendingLink.rows[0]) });
+            .send({ user: publicUser(user), providerLinked: true, ...(native ? { token } : {}) });
         } catch (error) {
           await client.query("ROLLBACK");
           if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
@@ -489,12 +489,18 @@ export async function registerAuthRoutes(
     try {
       response = await fetch(`${supabase.url}/auth/v1/user`, {
         headers: { apikey: supabase.secretKey, Authorization: `Bearer ${request.body.accessToken}` },
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (error) {
       request.log.error({ reason: error instanceof Error ? error.message : String(error) }, "Supabase user lookup failed.");
       return reply.code(503).send({ message: "Google sign-in is temporarily unavailable. Try again in a minute." });
     }
-    if (!response.ok) return reply.code(401).send({ message: "Your Google sign-in expired. Try again." });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return reply.code(401).send({ message: "Your Google sign-in expired. Try again." });
+      }
+      return reply.code(503).send({ message: "Google sign-in is temporarily unavailable. Try again in a minute." });
+    }
     const identity = await response.json() as {
       email?: string; email_confirmed_at?: string | null; user_metadata?: { full_name?: string; name?: string };
     };

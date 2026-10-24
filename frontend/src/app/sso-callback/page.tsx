@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabase";
 import "../account/dashboard.css";
 
 // The one-time code can only be exchanged once, so React's dev double-run must not repeat it.
-let exchanging: Promise<string | null> | null = null;
+let exchanging: { search: string; promise: Promise<string | null> } | null = null;
 
 async function finishGoogleLogin(): Promise<string | null> {
   const params = new URLSearchParams(window.location.search);
@@ -23,6 +23,7 @@ async function finishGoogleLogin(): Promise<string | null> {
   if (error || !data.session) return "That Google sign-in link expired. Try again.";
   const response = await apiFetch("/v1/auth/supabase", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: data.session.access_token }),
+    signal: AbortSignal.timeout(20_000),
   });
   // Retain the Supabase session for RLS-protected Friends & Groups and Realtime.
   const body = await response.json().catch(() => ({})) as { message?: string; token?: string; user?: { email?: string | null } };
@@ -41,9 +42,13 @@ export default function SsoCallback() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    exchanging ??= finishGoogleLogin().catch(() => "Google sign-in could not be completed. Check your connection.");
+    const search = window.location.search;
+    // Deduplicate React's effect replay, but allow a new Google attempt after an earlier failure or logout.
+    if (!exchanging || exchanging.search !== search) {
+      exchanging = { search, promise: finishGoogleLogin().catch(() => "Google sign-in could not be completed. Check your connection.") };
+    }
     let active = true;
-    void exchanging.then((problem) => {
+    void exchanging.promise.then((problem) => {
       if (!active) return;
       if (problem) setError(problem);
       else router.replace("/account");

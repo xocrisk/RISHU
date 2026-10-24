@@ -13,6 +13,28 @@ const config = {
   sessionSecret,
 };
 
+for (const status of [401, 403, 429, 500, 503]) {
+  test(`Google login handles identity service HTTP ${status}`, async (t) => {
+    const app = await buildApp({
+      pool: { query: async () => { throw new Error("Failed identity checks must not access accounts"); } },
+      config: { ...config, supabase: { url: "https://auth.example", secretKey: "test-key" } },
+    });
+    t.mock.method(globalThis, "fetch", async (_url, init) => {
+      assert.ok(init.signal instanceof AbortSignal);
+      return new Response(null, { status });
+    });
+    try {
+      const response = await app.inject({
+        method: "POST", url: "/v1/auth/supabase", payload: { accessToken: "test-access-token-long-enough" },
+      });
+      const expired = status === 401 || status === 403;
+      assert.equal(response.statusCode, expired ? 401 : 503);
+      assert.match(response.json().message, expired ? /expired/ : /temporarily unavailable/);
+      assert.equal(response.headers["set-cookie"], undefined);
+    } finally { await app.close(); }
+  });
+}
+
 function makeApp(pool = {
   query: async () => { throw new Error("Unexpected database query"); },
   connect: async () => { throw new Error("Unexpected database connection"); },
@@ -340,7 +362,7 @@ test("login accepts an Indian mobile number as the account identifier", async ()
   }
 });
 
-test("first-time OAuth identity linking requires and follows password verification", async () => {
+for (const native of [false, true]) test(`first-time OAuth linking preserves the ${native ? "app" : "web"} session`, async () => {
   const user = {
     id: "123e4567-e89b-42d3-a456-426614174000",
     email: "user@example.com",
@@ -350,8 +372,11 @@ test("first-time OAuth identity linking requires and follows password verificati
     password_hash: await hashPassword("a-long-password"),
   };
   const linked = [];
+  let sessionHash;
+  let sessionExpiresAt;
   const pool = {
-    query: async (sql) => {
+    query: async (sql, values = []) => {
+      if (sql.includes("FROM auth_sessions")) return { rows: values[0] === sessionHash ? [user] : [] };
       if (sql.includes("FROM users")) return { rows: [user] };
       throw new Error(`Unexpected pool query: ${sql}`);
     },
@@ -361,6 +386,10 @@ test("first-time OAuth identity linking requires and follows password verificati
           return { rows: [{ provider: "google", provider_subject: "provider-subject" }] };
         }
         if (sql.includes("INSERT INTO oauth_accounts")) linked.push(values);
+        if (sql.includes("INSERT INTO auth_sessions")) {
+          sessionHash = values[1];
+          sessionExpiresAt = values[2];
+        }
         return { rows: [] };
       },
       release() {},
@@ -371,13 +400,32 @@ test("first-time OAuth identity linking requires and follows password verificati
     const response = await app.inject({
       method: "POST",
       url: "/v1/auth/login",
-      headers: { cookie: "xocrisk_oauth_link=opaque-link-token" },
+      headers: { cookie: "xocrisk_oauth_link=opaque-link-token", ...(native ? { "x-xocrisk-client": "app" } : {}) },
       payload: { identifier: "user@example.com", password: "a-long-password" },
     });
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().providerLinked, true);
     assert.deepEqual(linked, [["google", "provider-subject", user.id]]);
-    assert.match(response.headers["set-cookie"].join(";"), /xocrisk_session=/);
+    // Apply Set-Cookie in order, as a browser does. A later deletion must not erase the new session.
+    const cookies = new Map();
+    for (const cookie of response.headers["set-cookie"]) {
+      const [name, value] = cookie.split(";")[0].split("=");
+      if (/Max-Age=0(?:;|$)/.test(cookie)) cookies.delete(name);
+      else cookies.set(name, value);
+    }
+    assert.ok(cookies.get("xocrisk_session"), "the login response must keep the session cookie");
+    assert.equal(cookies.has("xocrisk_oauth_link"), false);
+    assert.equal(typeof response.json().token, native ? "string" : "undefined");
+    const me = await app.inject({
+      method: "GET", url: "/v1/auth/me",
+      headers: native
+        ? { authorization: `Bearer ${response.json().token}` }
+        : { cookie: `xocrisk_session=${cookies.get("xocrisk_session")}` },
+    });
+    assert.equal(me.statusCode, 200);
+    assert.equal(me.json().user.id, user.id);
+    const lifetime = sessionExpiresAt.getTime() - Date.now();
+    assert.ok(native ? lifetime > 179 * 24 * 60 * 60 * 1000 : lifetime < 13 * 60 * 60 * 1000);
   } finally {
     await app.close();
   }

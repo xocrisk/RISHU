@@ -83,14 +83,18 @@ export default function LoginForm() {
   // If Supabase sent Google's return to the site's home page instead of /sso-callback/, finish there.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.has("code") || params.has("error_description")) router.replace(`/sso-callback/?${params.toString()}`);
+    if (params.has("code") || params.has("error") || params.has("error_description")) router.replace(`/sso-callback/?${params.toString()}`);
   }, [router]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("code") || params.has("error") || params.has("error_description") || params.get("oauth") === "link") return;
     let cancelled = false;
     apiFetch("/v1/auth/me")
       .then((response) => {
-        if (cancelled || !response.ok) return;
+        if (cancelled) return;
+        if (response.status === 401) markSignedIn(false);
+        if (!response.ok) return;
         // Signed in already (web or app): skip the login form. The app lock protects the app.
         markSignedIn(true);
         router.replace("/account");

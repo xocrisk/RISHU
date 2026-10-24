@@ -8,6 +8,14 @@ export const supabase = getSupabaseClient;
 
 /** Sends the browser to Google (via Supabase). Comes back to /sso-callback/. */
 export async function startGoogleLogin(): Promise<string | null> {
+  try {
+    return await openGoogleLogin();
+  } catch {
+    return "Couldn't open Google sign-in. Check your connection and try again.";
+  }
+}
+
+async function openGoogleLogin(): Promise<string | null> {
   const auth = supabase()?.auth;
   if (!auth) return "Google sign-in isn't set up yet. Use your email and password.";
   if (isNativeApp()) return startGoogleLoginInApp(auth);

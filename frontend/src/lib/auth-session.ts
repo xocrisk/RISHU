@@ -74,12 +74,21 @@ export async function createAuthSession(
   path: "/v1/auth/login" | "/v1/auth/signup",
   body: Record<string, unknown>,
 ): Promise<{ success: true; email: string | null } | { success: false; message: string }> {
-  const response = await apiFetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const result = await response.json() as { user?: { email?: string | null }; token?: string; message?: string };
+  let response: Response;
+  try {
+    response = await apiFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    return { success: false, message: "Couldn't reach XOCRISK. Check your connection and try again." };
+  }
+  const result = await response.json().catch(() => null) as { user?: { email?: string | null }; token?: string; message?: string } | null;
+  if (!result || typeof result !== "object") {
+    return { success: false, message: "XOCRISK is temporarily unavailable. Try again in a minute." };
+  }
   if (!response.ok || !result.user) {
     return { success: false, message: result.message ?? "Authentication could not be completed." };
   }
