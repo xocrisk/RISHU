@@ -37,6 +37,7 @@ const icons = {
   note: "M5 2h7l4 4v12H5zM12 2v4h4M8 10h5M8 13h5",
   help: "M10 17a7 7 0 100-14 7 7 0 000 14zM8 8a2 2 0 114 0c0 1.5-2 1.5-2 3M10 14h.01",
   phone: "M5 2h3l1.5 4-2 1.5a10 10 0 005 5l1.5-2 4 1.5v3a2 2 0 01-2 2A15 15 0 013 4a2 2 0 012-2z",
+  group: "M7 9a3 3 0 100-6 3 3 0 000 6M13 4a3 3 0 010 6M1 17c0-5 12-5 12 0M14 13c3 0 5 2 5 4",
   invite: "M8 9a3 3 0 100-6 3 3 0 000 6zM2 17c.6-2.8 3-4.5 6-4.5s5.4 1.7 6 4.5M15 6v6M12 9h6",
 };
 
@@ -86,7 +87,8 @@ export function ProfileView({ data, privacy, notify, onPrivacy, onNavigate, onEd
       </Group>
 
       <Group title="Community">
-        <Row hint="Chats, requests and your trading circle" icon={icons.invite} label="Friends & Groups" onClick={() => onNavigate("friends")} />
+        <Row hint="Chats, requests and your trading circle" icon={icons.group} label="Friends & Groups" onClick={() => onNavigate("friends")} />
+        <Row hint="Search a User ID, share your QR or scan a friend's" icon={icons.invite} label="Add Friend" onClick={() => onNavigate("add-friend")} />
         <Row hint="Conducted by LPU · ₹99 entry" icon={icons.trophy} label="LPU Championship" onClick={() => onNavigate("championship")} />
         <Row icon={icons.chat} label="Community chat" onClick={() => onNavigate("community")} />
         <Row icon={icons.spark} label="XOCRISK AI" onClick={() => onNavigate("ai")} />

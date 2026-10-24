@@ -6,20 +6,28 @@ import { alphabet, createMockFriendsRepository, friendsOf, sectionOf, sortUsers,
 import "./friends.css";
 
 const subscribe = (callback: () => void) => { window.addEventListener("hashchange", callback); return () => window.removeEventListener("hashchange", callback); };
-const snapshot = () => window.location.hash.replace(/^#friends\/?/, "") || "chats";
+// "add-friend" is the standalone Add Friend section: it owns add/qr/scan; every other screen lives under #friends/.
+export type FriendsBase = "friends" | "add-friend";
+const own = new Set(["add", "qr", "scan"]);
+const rootOf = (base: FriendsBase) => base === "add-friend" ? "add" : "chats";
+const readRoute = (base: FriendsBase) => {
+  const [head, ...rest] = window.location.hash.slice(1).split("/");
+  return head === base && rest.join("/") || rootOf(base);
+};
 const screens = new Set(["chats", "contacts", "groups", "add", "requests", "search-groups", "select", "name", "qr", "scan", "notices", "thread"]);
 const titles: Record<string, string> = { chats: "Chats", contacts: "Friends", groups: "Friends", add: "Add Friends", requests: "New Friends", "search-groups": "Search Group", select: "Select Friends", name: "Create Group", qr: "My QR Code", scan: "Scan to add", notices: "Group Notice", thread: "Chat" };
 const id = () => crypto.randomUUID();
 const displayId = (user: User) => user.publicId ?? user.id;
 
-export default function FriendsView({ scope, createRepository = createMockFriendsRepository }: { scope: string; createRepository?: (scope: string) => FriendsRepository }) {
+export default function FriendsView({ scope, base = "friends", createRepository = createMockFriendsRepository }: { scope: string; base?: FriendsBase; createRepository?: (scope: string) => FriendsRepository }) {
   const service = useMemo(() => createRepository(scope), [createRepository, scope]);
   const [state, setState] = useState<FriendsState | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const route = useSyncExternalStore(subscribe, snapshot, () => "chats");
+  const root = rootOf(base);
+  const route = useSyncExternalStore(subscribe, () => readRoute(base), () => root);
   const [rawScreen, threadId] = route.split("/");
-  const screen = screens.has(rawScreen) ? rawScreen : "chats";
+  const screen = screens.has(rawScreen) && (base === "friends" || own.has(rawScreen)) ? rawScreen : root;
   const [searchState, setSearchState] = useState({ route: "", value: "" });
   const query = searchState.route === route ? searchState.value : "";
   const setQuery = (value: string) => setSearchState({ route, value });
@@ -33,6 +41,7 @@ export default function FriendsView({ scope, createRepository = createMockFriend
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [found, setFound] = useState<{ query: string; user: User | null; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     let active = true;
     void service.load().then((next) => { if (active) setState(next); }).catch((cause) => { if (active) setLoadError(cause instanceof Error ? cause.message : "Friends couldn't load. Try again."); });
@@ -71,7 +80,7 @@ export default function FriendsView({ scope, createRepository = createMockFriend
 
   function go(next: string) {
     setQuery(""); setStatus(""); setEditing(false); setMenuOpen(false);
-    window.location.hash = `friends/${next}`;
+    window.location.hash = base === "add-friend" && own.has(next) ? `add-friend${next === "add" ? "" : `/${next}`}` : `friends/${next}`;
   }
   async function act(action: FriendsAction, success: string) {
     if (busy) return false;
@@ -81,6 +90,7 @@ export default function FriendsView({ scope, createRepository = createMockFriend
     finally { setBusy(false); }
   }
   async function requestByPublicId(publicId: string) {
+    if (state && publicId === displayId(state.me)) { setStatus("That's your own QR code. Scan a friend's code instead."); return false; }
     if (!service.searchUser) return act({ type: "request", userId: publicId }, "QR scanned. Friend request sent.");
     try {
       const user = await service.searchUser(publicId);
@@ -89,7 +99,7 @@ export default function FriendsView({ scope, createRepository = createMockFriend
     } catch (cause) { setStatus(cause instanceof Error ? cause.message : "Couldn't look up this ID. Try again."); return false; }
   }
   async function copy(value: string) {
-    try { await navigator.clipboard.writeText(value); setStatus("User ID copied."); }
+    try { await navigator.clipboard.writeText(value); setStatus("User ID copied."); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { setStatus("Couldn't copy. Press and hold the ID to copy it manually."); }
   }
   async function invite() {
@@ -122,7 +132,7 @@ export default function FriendsView({ scope, createRepository = createMockFriend
   return <section className="fg-shell" aria-label="Friends and groups">
     <div className="fg-kicker">YOUR TRADING CIRCLE {service.sample && <span>Sample data</span>}</div>
     <header className="fg-header">
-      {screen !== "chats" && <button type="button" className="fg-icon-btn" aria-label="Back" onClick={back}><Icon name="back" /></button>}
+      {screen !== root && <button type="button" className="fg-icon-btn" aria-label="Back" onClick={back}><Icon name="back" /></button>}
       <h1 tabIndex={-1} ref={heading}>{screen === "thread" ? threadGroup?.name || threadUser?.nickname || "Chat" : titles[screen]}</h1>
       {screen === "chats" && <div className="fg-menu-anchor" ref={menu}><button type="button" className="fg-icon-btn fg-add" aria-label="New chat options" aria-expanded={menuOpen} aria-controls="fg-actions" onClick={() => setMenuOpen(!menuOpen)}><Icon name="plus" /></button>
         {menuOpen && <div className="fg-menu" id="fg-actions" aria-label="New chat options">{([
@@ -161,8 +171,8 @@ export default function FriendsView({ scope, createRepository = createMockFriend
     </>}
     {screen === "add" && <>
       <SearchField value={query} onChange={setQuery} placeholder="Search User ID" />
-      <div className="fg-ownid">My ID: <code>{displayId(state.me)}</code><button type="button" className="fg-icon-btn" aria-label="Copy my user ID" onClick={() => void copy(displayId(state.me))}><Icon name="copy" /></button></div>
-      <div className="fg-quick-actions">{actionButton("My QR Code", "qr", () => go("qr"))}{actionButton("Scan to add", "scan", () => go("scan"))}{actionButton("Invite Friends", "share", () => void invite())}</div>
+      <div className="fg-ownid">My ID: <code>{displayId(state.me)}</code><button type="button" className="fg-icon-btn" aria-label={copied ? "User ID copied" : "Copy my user ID"} onClick={() => void copy(displayId(state.me))}><Icon name={copied ? "check" : "copy"} /></button></div>
+      <div className="fg-quick-actions">{actionButton("My QR Code", "qr", () => go("qr"))}{actionButton("Scan to add", "scan", () => go("scan"))}{actionButton("Invite Friends", "invite", () => void invite())}</div>
       <div className="fg-section-label">{query ? "SEARCH RESULTS" : "PEOPLE YOU MAY KNOW"}</div>
       {searching && <p className="fg-subtitle" role="status">Searching…</p>}
       {sortUsers(candidates).map((user) => {

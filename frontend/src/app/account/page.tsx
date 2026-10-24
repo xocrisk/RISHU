@@ -45,6 +45,7 @@ const navSections: { title: string; items: NavItem[] }[] = [
   { title: "Community", items: [
     { id: "championship", label: "Championship", icon: "M6 3h8v4a4 4 0 01-8 0zM6 5H3v1a3 3 0 003 3M14 5h3v1a3 3 0 01-3 3M10 11v3M7 17h6M8 14h4v3H8z", badge: "LPU" },
     { id: "friends", label: "Friends & Groups", icon: "M7 9a3 3 0 100-6 3 3 0 000 6M13 4a3 3 0 010 6M1 17c0-5 12-5 12 0M14 13c3 0 5 2 5 4" },
+    { id: "add-friend", label: "Add Friend", icon: "M8 9a3 3 0 100-6 3 3 0 000 6zM2 17c.6-2.8 3-4.5 6-4.5s5.4 1.7 6 4.5M15 6v6M12 9h6" },
     { id: "community", label: "Community", icon: "M3 4h14v9H8l-4 3v-3H3zM6 8h8M6 10.5h5" },
   ] },
   { title: "Tools", items: [
@@ -282,7 +283,7 @@ export default function AccountPage() {
   }, []);
   useEffect(() => {
     const hash = tab === "dashboard" ? "" : `#${tab}`;
-    if (window.location.hash !== hash && !(tab === "friends" && window.location.hash.startsWith("#friends/"))) window.history.pushState(null, "", `${window.location.pathname}${hash}`);
+    if (window.location.hash !== hash && !(hash && window.location.hash.startsWith(`${hash}/`))) window.history.pushState(null, "", `${window.location.pathname}${hash}`);
   }, [tab]);
 
   const quotes = useMemo(() => new Map((data?.market.quotes ?? []).map((quote) => [quote.symbol, quote])), [data]);
@@ -300,8 +301,9 @@ export default function AccountPage() {
   const closeTicket = useCallback(() => setTicket(null), []);
 
   function navigate(next: Tab) {
-    if (next === "friends" && tab === "friends") {
-      window.history.pushState(null, "", "#friends/chats");
+    // Re-selecting a section with sub-screens (Friends, Add Friend) returns to its first screen.
+    if (next === tab && window.location.hash.startsWith(`#${next}/`)) {
+      window.history.pushState(null, "", `#${next}`);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
     setTab(next);
@@ -563,6 +565,7 @@ export default function AccountPage() {
           {tab === "trends" && <TrendsView data={data} onOpen={openStock} onTrade={trade} />}
           {tab === "championship" && <ChampionshipView notify={toast} onChanged={() => void load().catch(() => {})} />}
           {tab === "friends" && <FriendsView scope={data.user.uid} createRepository={createSupabaseFriendsRepository} />}
+          {tab === "add-friend" && <FriendsView base="add-friend" scope={data.user.uid} createRepository={createSupabaseFriendsRepository} />}
           {tab === "community" && <CommunityView data={data} notify={toast} />}
           {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
           {tab === "notes" && <NotesView notify={toast} />}

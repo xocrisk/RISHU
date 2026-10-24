@@ -44,7 +44,7 @@ export type Dashboard = {
 };
 
 export type Tab = "dashboard" | "portfolio" | "wallet" | "watchlist" | "trade" | "transactions"
-  | "friends" | "insights" | "analytics" | "trends" | "championship" | "community" | "ai" | "notes" | "support" | "settings" | "profile";
+  | "friends" | "add-friend" | "insights" | "analytics" | "trends" | "championship" | "community" | "ai" | "notes" | "support" | "settings" | "profile";
 
 export type OrderTicket = { symbol: string; side: Side; quantity?: number; product?: Product; orderType?: OrderType; price?: number };
 

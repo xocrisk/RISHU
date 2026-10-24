@@ -10,10 +10,11 @@ const paths = {
   search: "M14 14l4 4M15 8.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0",
   friend: "M7 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7M1 18c0-4 12-4 12 0M16 6v6M13 9h6",
   group: "M7 9a3 3 0 100-6 3 3 0 000 6M13 4a3 3 0 010 6M1 17c0-5 12-5 12 0M14 13c3 0 5 2 5 4",
-  qr: "M2 2h6v6H2zM12 2h6v6h-6zM2 12h6v6H2zM12 12h2v2h4v4h-6z",
-  scan: "M2 7V2h5M13 2h5v5M18 13v5h-5M7 18H2v-5M4 10h12",
-  share: "M10 13V2M6 6l4-4 4 4M4 10v8h12v-8",
+  qr: "M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM5.5 5.5h0M14.5 5.5h0M5.5 14.5h0M12 12h2v2M17 12v2M12 17h5M15 14.5v.5",
+  scan: "M3 7V5a2 2 0 012-2h2M13 3h2a2 2 0 012 2v2M17 13v2a2 2 0 01-2 2h-2M7 17H5a2 2 0 01-2-2v-2M3 10h14",
+  invite: "M18 2L9 11M18 2l-6 16-3-7-7-3z",
   copy: "M7 7h10v11H7zM13 7V2H2v11h5",
+  check: "M4 10.5l4 4 8-9",
   bell: "M4 14h12l-2-3V7a4 4 0 00-8 0v4zM8 17h4",
   chat: "M2 3h16v11H8l-5 4v-4H2zM6 7h8M6 10h5",
   close: "M4 4l12 12M16 4L4 16",
@@ -42,7 +43,11 @@ export function MyQr({ uid }: { uid: string }) {
   return <div className="fg-myqr"><div className="fg-qr-paper"><canvas ref={canvas} role="img" aria-label={`QR code for user ${uid}`} /></div><code>{uid}</code><p>Let a friend scan this code to add you.</p>{error && <p role="alert">{error}</p>}</div>;
 }
 
-/** Mount only after a Scan tap. getUserMedia triggers the browser/native permission prompt. */
+/**
+ * Mount only after a Scan tap. getUserMedia triggers the browser/native permission prompt.
+ * The camera follows the permission: revoking it stops the scanner, granting it again restarts it,
+ * and returning to the app after it was backgrounded resumes scanning.
+ */
 export function QrScanner({ onScan }: { onScan: (uid: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const callback = useRef(onScan);
@@ -54,17 +59,19 @@ export function QrScanner({ onScan }: { onScan: (uid: string) => void }) {
     let stream: MediaStream | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = () => { active = false; clearTimeout(timer); stream?.getTracks().forEach((track) => track.stop()); };
-    const hide = () => { if (document.hidden) { stop(); setError("Camera paused. Tap Try again to resume scanning."); } };
+    const hide = () => { if (document.hidden) stop(); else if (!active) setAttempt((n) => n + 1); };
     document.addEventListener("visibilitychange", hide);
     async function start() {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera unavailable. Open the app on HTTPS or use Search User ID.");
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
         if (!active) { stream.getTracks().forEach((track) => track.stop()); return; }
+        stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () => { if (!active) return; stop(); setError("Camera turned off. Allow camera access, then tap Try again."); }));
         const preview = video.current;
         if (!preview) { stop(); return; }
         preview.srcObject = stream;
         await preview.play();
+        setError("");
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) throw new Error("Camera preview unavailable.");
@@ -99,7 +106,20 @@ export function QrScanner({ onScan }: { onScan: (uid: string) => void }) {
     void start();
     return () => { stop(); document.removeEventListener("visibilitychange", hide); };
   }, [attempt]);
+  useEffect(() => {
+    let status: PermissionStatus | undefined;
+    let disposed = false;
+    // Restarting either reopens the camera (granted) or reports the denial (denied).
+    const onChange = () => { if (status?.state !== "prompt") setAttempt((n) => n + 1); };
+    // Not every WebView supports querying "camera"; the getUserMedia errors still cover those.
+    navigator.permissions?.query({ name: "camera" as PermissionName }).then((result) => {
+      if (disposed) return;
+      status = result;
+      status.addEventListener("change", onChange);
+    }, () => {});
+    return () => { disposed = true; status?.removeEventListener("change", onChange); };
+  }, []);
   return <div className="fg-scanner"><div className="fg-camera"><video ref={video} muted playsInline aria-label="QR scanner camera" /><div className="fg-scan-guide" /></div>
-    <p>Allow camera access when prompted, then point it at a friend&apos;s QR. A sample friend request will be sent when their ID is found.</p>
+    <p>Allow camera access when prompted, then point it at a friend&apos;s QR. A friend request is sent as soon as their ID is found.</p>
     {error && <div role="alert"><p>{error}</p><button className="xq-btn" type="button" onClick={() => { setError(""); setAttempt((n) => n + 1); }}>Try again</button></div>}</div>;
 }
