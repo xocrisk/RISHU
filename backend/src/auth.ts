@@ -538,6 +538,43 @@ export async function registerAuthRoutes(
       .send({ user: publicUser(user), created, ...(app ? { token } : {}) });
   });
 
+  // Mint a Supabase Auth session for whoever already holds a trading session, so Friends & Groups (which needs
+  // Supabase Auth for RLS/Realtime) works for email/password logins too, and keeps working after an app reinstall
+  // wipes the stored Supabase session. Returns a one-time magic-link token_hash the client verifies to get a
+  // persisted session; the trading session proves identity, so no email is ever sent.
+  app.post("/v1/auth/supabase-session", {
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+  }, async (request, reply) => {
+    const user = request.authUser;
+    if (!user) return reply.code(401).send({ message: "Sign in to XOCRISK first." });
+    if (!supabase) return reply.code(503).send({ message: "Friends & Groups isn't set up yet. Try again later." });
+    if (!user.email) return reply.code(409).send({ message: "Add a verified email to your account to use Friends & Groups." });
+
+    // Make sure the Supabase user exists and is confirmed (idempotent: 422 just means it's already there).
+    await mirrorUserToSupabase(supabase, user, request.log);
+
+    let response: Response;
+    try {
+      response = await fetch(`${supabase.url}/auth/v1/admin/generate_link`, {
+        method: "POST",
+        headers: { apikey: supabase.secretKey, Authorization: `Bearer ${supabase.secretKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "magiclink", email: user.email }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (error) {
+      request.log.error({ reason: error instanceof Error ? error.message : String(error) }, "Supabase session mint failed.");
+      return reply.code(503).send({ message: "Friends & Groups is temporarily unavailable. Try again in a minute." });
+    }
+    if (!response.ok) {
+      request.log.warn({ status: response.status }, "Couldn't generate a Supabase link.");
+      return reply.code(503).send({ message: "Friends & Groups is temporarily unavailable. Try again in a minute." });
+    }
+    const link = await response.json().catch(() => null) as { hashed_token?: string } | null;
+    const tokenHash = link?.hashed_token;
+    if (!tokenHash) return reply.code(503).send({ message: "Friends & Groups is temporarily unavailable. Try again in a minute." });
+    return reply.send({ tokenHash, email: user.email });
+  });
+
   // Google sign-in from the Android/iOS app runs in the phone's browser (Google blocks it inside app web views).
   // Supabase returns that browser here, and this hands the one-time code to the app through its own link scheme.
   // The code is useless without the PKCE verifier that stays inside the app, so passing it along is safe.

@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "../supabase/client";
+import { ensureSupabaseSession } from "../supabase";
 import type { FriendsRepository, FriendsState, Group, User } from "../../app/account/friends/model";
 
 type Profile = { id: string; nickname: string | null; avatar_url: string | null; public_id: string };
@@ -25,8 +26,14 @@ function client() {
 }
 async function currentUser() {
   const { data, error } = await client().auth.getUser();
-  if (error || !data.user) throw new Error("Sign in with Supabase Auth to use Friends & Groups. Your trading account session alone isn't sufficient.");
-  return data.user;
+  if (!error && data.user) return data.user;
+  // Email/password logins (and apps whose stored session a reinstall wiped) hold only a trading session.
+  // Mint a Supabase session from it, then retry once, before giving up.
+  if (await ensureSupabaseSession()) {
+    const retry = await client().auth.getUser();
+    if (!retry.error && retry.data.user) return retry.data.user;
+  }
+  throw new Error("Friends & Groups couldn't connect to your account. Check your connection and try again.");
 }
 function asUser(profile: Profile): User {
   return { id: profile.id, publicId: profile.public_id, nickname: profile.nickname || "Trader", avatar: (profile.nickname || "T").slice(0, 1).toUpperCase(), avatarUrl: profile.avatar_url || undefined };

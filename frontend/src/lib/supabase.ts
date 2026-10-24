@@ -1,10 +1,39 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { authApiOrigin, isNativeApp } from "./auth-session";
+import { apiFetch, authApiOrigin, isNativeApp } from "./auth-session";
 import { getSupabaseClient } from "./supabase/client";
 export { supabaseConfigured } from "./supabase/client";
 export const supabase = getSupabaseClient;
+
+let ensuring: Promise<boolean> | null = null;
+
+/** Make sure there's a Supabase Auth session for the signed-in trader, so Friends & Groups (RLS/Realtime) works.
+ *  Email/password logins never get one from the OAuth flow, and an app reinstall wipes a Google user's stored
+ *  session; in both cases we mint a fresh one from the existing trading session. Returns true if a session exists. */
+export async function ensureSupabaseSession(): Promise<boolean> {
+  const auth = supabase()?.auth;
+  if (!auth) return false;
+  const existing = await auth.getUser();
+  if (!existing.error && existing.data.user) return true;
+  // Dedupe concurrent callers so we only mint and verify one token.
+  ensuring ??= mintSupabaseSession(auth).finally(() => { ensuring = null; });
+  return ensuring;
+}
+
+async function mintSupabaseSession(auth: SupabaseClient["auth"]): Promise<boolean> {
+  let response: Response;
+  try {
+    response = await apiFetch("/v1/auth/supabase-session", { method: "POST", signal: AbortSignal.timeout(20_000) });
+  } catch {
+    return false;
+  }
+  if (!response.ok) return false;
+  const body = await response.json().catch(() => null) as { tokenHash?: string } | null;
+  if (!body?.tokenHash) return false;
+  const { error } = await auth.verifyOtp({ type: "magiclink", token_hash: body.tokenHash });
+  return !error;
+}
 
 /** Sends the browser to Google (via Supabase). Comes back to /sso-callback/. */
 export async function startGoogleLogin(): Promise<string | null> {
