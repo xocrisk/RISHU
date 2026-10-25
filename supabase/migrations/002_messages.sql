@@ -7,6 +7,16 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Apply 001_friends_groups.sql first; Friends & Groups tables are required';
   END IF;
 END $$;
+-- Projects set up before 001 have is_group_member(gid, uid) instead of social_member(gid); add the latter.
+DO $$ BEGIN
+  IF to_regprocedure('public.social_member(uuid)') IS NULL THEN
+    CREATE FUNCTION public.social_member(target_group uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $f$
+      SELECT auth.uid() IS NOT NULL AND EXISTS(SELECT 1 FROM public.group_members WHERE group_id=target_group AND user_id=auth.uid());
+    $f$;
+    REVOKE ALL ON FUNCTION public.social_member(uuid) FROM PUBLIC, anon;
+    GRANT EXECUTE ON FUNCTION public.social_member(uuid) TO authenticated;
+  END IF;
+END $$;
 
 CREATE TABLE public.messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
