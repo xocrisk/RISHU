@@ -2,10 +2,11 @@ export type User = { id: string; publicId?: string; nickname: string; avatar: st
 export type FriendRequest = { id: string; from: string; to: string; status: "pending" | "accepted" | "rejected" };
 export type Friendship = { userA: string; userB: string };
 export type Group = { id: string; name: string; ownerId?: string; members: string[]; notice: string };
-export type Message = { id: string; thread: string; from: string; text: string; createdAt: string };
+export type Message = { id: string; thread: string; from: string; text: string; createdAt: string; group?: boolean };
 /** Chats disappear this long after they're sent (also enforced by Supabase RLS and a scheduled purge). */
-export const messageLifetimeMs = 24 * 60 * 60 * 1000;
-export const isLiveMessage = (message: Message, now: number) => now - Date.parse(message.createdAt) < messageLifetimeMs;
+export const messageLifetimeMs = { direct: 24 * 60 * 60 * 1000, group: 60 * 60 * 1000 };
+export const isLiveMessage = (message: Message, now: number) =>
+  now - Date.parse(message.createdAt) < messageLifetimeMs[message.group ? "group" : "direct"];
 export type FriendsState = { me: User; users: User[]; requests: FriendRequest[]; friendships: Friendship[]; groups: Group[]; messages: Message[] };
 export type FriendsAction =
   | { type: "request"; userId: string }
@@ -64,11 +65,11 @@ export function reduceFriends(state: FriendsState, action: FriendsAction): Frien
       return { ...state, groups: state.groups.map((g) => g.id === action.groupId ? { ...g, members: [...new Set([...g.members, state.me.id])] } : g) };
     }
     case "message": {
-      const canSend = friendIds.includes(action.thread) || state.groups.some((g) => g.id === action.thread && g.members.includes(state.me.id));
-      if (!canSend) throw new Error("Add this friend or join the group before chatting.");
+      const group = state.groups.some((g) => g.id === action.thread && g.members.includes(state.me.id));
+      if (!group && !friendIds.includes(action.thread)) throw new Error("Add this friend or join the group before chatting.");
       const text = action.text.trim();
       if (!text || text.length > 1000) throw new Error("Enter a message of 1–1,000 characters.");
-      return { ...state, messages: [...state.messages, { id: action.id, thread: action.thread, from: state.me.id, text, createdAt: action.createdAt }] };
+      return { ...state, messages: [...state.messages, { id: action.id, thread: action.thread, from: state.me.id, text, createdAt: action.createdAt, group }] };
     }
   }
 }

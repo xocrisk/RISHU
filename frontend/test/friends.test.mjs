@@ -49,9 +49,14 @@ test("removing a friend blocks new messages and preserves existing history", () 
   assert.ok(state.messages.some((m) => m.thread === "FR000001"));
   assert.throws(() => reduceFriends(state, { type: "message", thread: "FR000001", text: "Hello", id: "m", createdAt: "2026-01-01" }));
 });
-test("chat messages expire 24 hours after they are sent", () => {
+test("direct messages expire after 24 hours, group messages after 1 hour", () => {
   const sent = Date.parse("2026-10-25T10:00:00Z");
   const message = { id: "m", thread: "t", from: "f", text: "hi", createdAt: new Date(sent).toISOString() };
-  assert.equal(isLiveMessage(message, sent + messageLifetimeMs - 1), true);
-  assert.equal(isLiveMessage(message, sent + messageLifetimeMs), false);
+  assert.equal(messageLifetimeMs.direct, 24 * 60 * 60 * 1000);
+  assert.equal(messageLifetimeMs.group, 60 * 60 * 1000);
+  assert.equal(isLiveMessage(message, sent + messageLifetimeMs.direct - 1), true);
+  assert.equal(isLiveMessage(message, sent + messageLifetimeMs.direct), false);
+  const groupMessage = { ...message, group: true };
+  assert.equal(isLiveMessage(groupMessage, sent + messageLifetimeMs.group - 1), true);
+  assert.equal(isLiveMessage(groupMessage, sent + messageLifetimeMs.group), false);
 });

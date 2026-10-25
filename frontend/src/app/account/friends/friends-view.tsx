@@ -43,7 +43,7 @@ export default function FriendsView({ scope, base = "friends", createRepository 
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [found, setFound] = useState<{ query: string; user: User | null; error?: string } | null>(null);
   const [copied, setCopied] = useState(false);
-  // Re-render every minute so chats vanish on screen as they pass 24 hours.
+  // Re-render every minute so chats vanish on screen as they expire.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
@@ -215,7 +215,7 @@ export default function FriendsView({ scope, base = "friends", createRepository 
     {screen === "notices" && <>{joined.map((g) => <article className="fg-notice" key={g.id}><span className="fg-tile"><Icon name="bell" /></span><div><h2>{g.name}</h2><p>{g.notice}</p></div></article>)}{!joined.length && <EmptyState title="No group notices yet" detail="Join a group to see its updates here." />}</>}
     {screen === "thread" && (validThread ? <>
       <p className="fg-subtitle">{threadGroup ? `${threadGroup.members.length} members · ${threadGroup.id}` : threadUser && displayId(threadUser)}</p>
-      <p className="fg-ephemeral">Messages disappear 24 hours after they&apos;re sent and can&apos;t be copied or saved.</p>
+      <p className="fg-ephemeral">Messages disappear {threadGroup ? "1 hour" : "24 hours"} after they&apos;re sent and can&apos;t be copied or saved.</p>
       <div className="fg-messages" role="log" aria-label={service.sample ? "Sample chat messages" : "Chat messages"} onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()}>{messages.filter((m) => m.thread === threadId).map((m) => <div key={m.id} className={`fg-message ${m.from === state.me.id ? "mine" : ""}`}><small>{m.from === state.me.id ? "You" : state.users.find((u) => u.id === m.from)?.nickname}</small><p>{m.text}</p></div>)}{!messages.some((m) => m.thread === threadId) && <EmptyState title="Say hello" detail="This is the beginning of your conversation." />}</div>
       <form className="fg-compose" onSubmit={(e) => { e.preventDefault(); void act({ type: "message", thread: threadId, text: message, id: id(), createdAt: new Date().toISOString() }, service.sample ? "Sample message saved." : "Message sent.").then((ok) => { if (ok) setMessage(""); }); }}><input aria-label="Message" maxLength={1000} placeholder="Write a message…" value={message} onChange={(e) => setMessage(e.target.value)} /><button type="submit" className="fg-pill" disabled={busy || !message.trim()}>Send</button></form>
     </> : <EmptyState title="Chat unavailable" detail="Add this friend or join the group first." />)}

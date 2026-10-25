@@ -92,8 +92,16 @@ export async function createGroup(name: string, memberIds: string[]): Promise<st
   await currentUser();
   const { data, error } = await client().rpc("create_group", { name: name.trim(), member_ids: [...new Set(memberIds)] });
   if (error) throw friendlyFriendsError(error);
-  if (typeof data !== "string") throw new Error("The server didn't return the created group.");
-  return data;
+  // The RPC may return the new group id as a bare uuid string, or as a row
+  // object ({ id, ... }) depending on the deployed function definition. Accept both.
+  const groupId =
+    typeof data === "string"
+      ? data
+      : data && typeof data === "object" && typeof (data as { id?: unknown }).id === "string"
+        ? (data as { id: string }).id
+        : null;
+  if (!groupId) throw new Error("The server didn't return the created group.");
+  return groupId;
 }
 export async function getMyGroups(): Promise<Group[]> {
   await currentUser();
@@ -122,10 +130,10 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
 }
 
 export async function getMessages(meId: string): Promise<Message[]> {
-  // RLS returns only this user's direct chats and the group chats they belong to, and nothing older than 24 hours.
+  // RLS returns only this user's direct chats (last 24 hours) and the group chats they belong to (last hour).
   const { data, error } = await client().from("messages")
     .select("id,thread_type,group_id,from_id,to_id,body,created_at")
-    .gt("created_at", new Date(Date.now() - messageLifetimeMs).toISOString())
+    .gt("created_at", new Date(Date.now() - messageLifetimeMs.direct).toISOString())
     .order("created_at", { ascending: true });
   if (error) throw friendlyFriendsError(error);
   return (data as MessageRow[]).map((row) => ({
@@ -135,6 +143,7 @@ export async function getMessages(meId: string): Promise<Message[]> {
     from: row.from_id,
     text: row.body,
     createdAt: row.created_at,
+    group: row.thread_type === "group",
   }));
 }
 export async function sendMessage(thread: string, text: string): Promise<void> {
