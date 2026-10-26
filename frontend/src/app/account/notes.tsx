@@ -1,11 +1,15 @@
 "use client";
 
+import "./learning-course.css";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthApi } from "../../lib/auth-session";
 import { Diagram } from "../../components/market-pattern-library/MarketPatternLibrary";
 import library from "../../components/market-pattern-library/patterns.json";
 import { istOrderTime } from "./format";
 import { Empty } from "./views";
+import { LearningCourse } from "./learning-course";
+import { completeActivity, learningStats, parseProgress, type LearningProgress } from "./learning-progress";
 
 type Note = {
   id: string; title: string; body: string; category: "foundation" | "candlestick" | "chart";
@@ -16,7 +20,7 @@ type Draft = { id?: string; title: string; body: string; version?: number };
 type Notify = (kind: "ok" | "error", text: string) => void;
 const categories = { foundation: "Foundations", candlestick: "Candlestick patterns", chart: "Chart patterns" };
 
-export function NotesView({ notify }: { notify: Notify }) {
+export function NotesView({ notify, scope }: { notify: Notify; scope: string }) {
   const authFetch = useAuthApi();
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -26,6 +30,10 @@ export function NotesView({ notify }: { notify: Notify }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [inCourse, setInCourse] = useState(false);
+  const [progress, setProgress] = useState<LearningProgress>({ completed: [], quizzes: [] });
+  const [storageError, setStorageError] = useState(false);
+  const progressKey = `xocrisk.learning.candlestick.v1.${scope}`;
 
   const load = useCallback(() => authFetch("/v1/notes", { cache: "no-store" })
     .then(response => {
@@ -33,6 +41,7 @@ export function NotesView({ notify }: { notify: Notify }) {
       return response.json() as Promise<{ notes: Note[]; canEdit: boolean }>;
     })
     .then(body => {
+      try { setProgress(parseProgress(localStorage.getItem(progressKey))); } catch { setStorageError(true); }
       setNotes(body.notes);
       setCanEdit(body.canEdit === true);
       setSelectedId(current => body.notes.some(note => note.id === current) ? current : body.notes[0]?.id ?? null);
@@ -41,13 +50,29 @@ export function NotesView({ notify }: { notify: Notify }) {
     .catch(() => {
       setCanEdit(false);
       setError("Could not load learning notes. Please retry.");
-    }), [authFetch]);
+    }), [authFetch, progressKey]);
   useEffect(() => { void load(); }, [load]);
 
   const visible = useMemo(() => (notes ?? []).filter(note =>
     (category === "all" || note.category === category)
     && `${note.title} ${note.body}`.toLowerCase().includes(query.trim().toLowerCase())), [notes, query, category]);
   const selected = visible.find(note => note.id === selectedId) ?? visible[0] ?? null;
+  const stats = learningStats(progress, notes ?? []);
+
+  function award(kind: keyof LearningProgress, id: string) {
+    if (progress[kind].includes(id)) return;
+    const updated = completeActivity(progress, kind, id);
+    setProgress(updated);
+    try { localStorage.setItem(progressKey, JSON.stringify(updated)); } catch { setStorageError(true); }
+    notify("ok", kind === "completed" ? "Lesson complete! +10 learning XP" : "Quiz passed! +30 learning XP");
+  }
+
+  function startChapter(nextCategory: string, id?: string) {
+    setCategory(nextCategory);
+    setQuery("");
+    setSelectedId(id ?? null);
+    setInCourse(true);
+  }
 
   async function save() {
     if (!canEdit || !draft || busy || !draft.title.trim()) return;
@@ -91,12 +116,11 @@ export function NotesView({ notify }: { notify: Notify }) {
   }
 
   return (
-    <div className="xq-page">
+    <div className="xq-page xq-learning">
       <div className="xq-page-head">
         <h1>Notes</h1>
-        <span className="xq-muted">{canEdit ? "Admin · changes are shared with everyone" : "Learning library · read-only · managed by admins"}</span>
+        {canEdit ? <button className="xq-btn" type="button" disabled={Boolean(draft) || busy} onClick={() => { setInCourse(true); setDraft({ title: "", body: "" }); }}>+ New lesson</button> : <span className="xq-muted">Your learning space</span>}
       </div>
-      <p className="xq-muted">{library.notice}</p>
       {error && <div className="xq-notes-error" role="alert">
         <p>{error}</p>
         <button className="xq-btn" disabled={busy} onClick={() => {
@@ -104,6 +128,9 @@ export function NotesView({ notify }: { notify: Notify }) {
           setDraft(null); void load();
         }} type="button">Reload notes</button>
       </div>}
+      {!inCourse && (notes ? <LearningCourse notes={notes} progress={progress} onStart={startChapter} onQuiz={id => award("quizzes", id)} /> : !error && <div className="xq-loading-block" role="status"><span className="xq-spinner" /><span>Loading your learning quest…</span></div>)}
+      {inCourse && <>
+      <div className="xq-course-reader-head"><button type="button" className="xq-btn" disabled={Boolean(draft) || busy} onClick={() => setInCourse(false)}>← All chapters</button><div><b>CANDLESTICK CHART</b><span>Level {stats.level} · {stats.xp} XP</span></div></div>
       <section className="xq-panel flush xq-notes">
         <aside className="xq-notes-list" aria-label="Learning notes">
           <div className="xq-notes-tools">
@@ -121,7 +148,7 @@ export function NotesView({ notify }: { notify: Notify }) {
           {notes === null ? !error && <div className="xq-loading-block" role="status"><span className="xq-spinner" /><span>Loading notes…</span></div> : <ul>
             {visible.map(note => <li key={note.id}>
               <button aria-current={note.id === selected?.id ? "true" : undefined} disabled={Boolean(draft) || busy} onClick={() => setSelectedId(note.id)} type="button">
-                <b>{note.title}</b><small>{categories[note.category]}</small>
+                <b>{progress.completed.includes(note.id) && <span className="xq-lesson-check" aria-label="Completed">✓ </span>}{note.title}</b><small>{categories[note.category]} · {progress.completed.includes(note.id) ? "Completed" : "+10 XP"}</small>
               </button>
             </li>)}
             {!visible.length && <li className="xq-muted xq-notes-empty">{notes.length ? "No notes match these filters." : "No learning notes published yet."}</li>}
@@ -148,14 +175,22 @@ export function NotesView({ notify }: { notify: Notify }) {
                 <button className="xq-btn danger" disabled={busy} onClick={() => void remove()} type="button">Delete</button>
               </div>}
             </div>
-            <article className="xq-note-reading" aria-labelledby="learning-note-title">
+            <article key={selected.id} className="xq-note-reading" aria-labelledby="learning-note-title" tabIndex={0}>
               <h2 id="learning-note-title">{selected.title}</h2>
               {selected.illustrations.map((drawing, index) => <Diagram key={index} drawing={drawing} />)}
               <div className="xq-note-text">{selected.body}</div>
+              <div className="xq-lesson-finish">
+                <div><b>{progress.completed.includes(selected.id) ? "✓ Lesson completed" : "One lesson closer."}</b><p>{progress.completed.includes(selected.id) ? "Your 10 XP is already counted. Revisit anytime." : "Finished reading? Mark this lesson complete to earn 10 XP."}</p></div>
+                <button className="xq-btn primary" type="button" disabled={progress.completed.includes(selected.id)} onClick={() => award("completed", selected.id)}>{progress.completed.includes(selected.id) ? "Completed ✓" : "Complete lesson · +10 XP"}</button>
+                {visible[visible.indexOf(selected) + 1] && <button className="xq-btn" type="button" onClick={() => setSelectedId(visible[visible.indexOf(selected) + 1].id)}>Next lesson →</button>}
+              </div>
             </article>
           </> : <Empty title={notes === null ? "Learning notes" : "No learning note selected"}><p>{notes === null ? "Your learning library will appear here." : "Choose a note or change your search filters."}</p></Empty>}
         </div>
       </section>
+      </>}
+      <p className="xq-course-footnote" role={storageError ? "status" : undefined}>{storageError ? "Browser storage is unavailable. Progress will last only for this visit." : "Progress is saved for your account in this browser. Learning XP has no cash or trading value."}</p>
+      <p className="xq-muted xq-course-footnote">{library.notice}</p>
       <details className="xq-notes-references"><summary>References and content notes</summary>
         <p>{library.rightsNote}</p>
         <ul>{library.references.map(reference => <li key={reference.url}><a href={reference.url} target="_blank" rel="noreferrer">{reference.title}</a> — {reference.purpose}</li>)}</ul>

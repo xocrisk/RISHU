@@ -569,7 +569,7 @@ export default function AccountPage() {
           {tab === "add-friend" && <FriendsView base="add-friend" scope={data.user.uid} createRepository={createSupabaseFriendsRepository} />}
           {tab === "community" && <CommunityView data={data} notify={toast} />}
           {tab === "ai" && <AiView data={data} indices={indices} quotes={quotes} />}
-          {tab === "notes" && <NotesView notify={toast} />}
+          {tab === "notes" && <NotesView key={data.user.uid} scope={data.user.uid} notify={toast} />}
           {tab === "support" && <SupportView />}
           {tab === "profile" && (
             <ProfileView data={data} notify={toast} onEdit={() => setEditingProfile(true)} onLogout={() => void logout()}
