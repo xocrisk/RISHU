@@ -1,0 +1,3240 @@
+{
+  "schemaVersion": "1.0.0",
+  "title": "Market Pattern Learning Library",
+  "language": "en",
+  "createdDate": "2026-10-25",
+  "description": "35 candlestick patterns and 18 chart-pattern topics, with original English teaching text and synthetic drawings.",
+  "notice": "For education only. Patterns can fail. No success rates are claimed. Examples are synthetic and are not personalized investment advice.",
+  "rightsNote": "Fresh wording, organization, code and synthetic drawings. No PDF pages, screenshots, logos or copied paragraphs are included. This is not legal clearance or a guarantee against copyright claims.",
+  "lessons": [
+    {
+      "id": "ohlc",
+      "title": "Read one candle",
+      "body": "A candle summarizes one interval using open, high, low and close. The body connects open and close; wicks reach the high and low. An up candle closes above its own open, not necessarily above the previous close.",
+      "points": [
+        "Body = abs(close - open). Range = high - low.",
+        "Upper wick = high - max(open, close). Lower wick = min(open, close) - low.",
+        "A small body means limited net movement, not necessarily low volume.",
+        "Color schemes vary; use open and close values to determine direction."
+      ]
+    },
+    {
+      "id": "context",
+      "title": "Locate the pattern",
+      "body": "A pattern describes behavior rather than proving what comes next. Read the prior trend and surrounding price levels before assigning meaning.",
+      "points": [
+        "Support and resistance are areas of previous reactions; both can fail.",
+        "Compare candle dimensions with recent volatility.",
+        "Keep higher-timeframe context and nearby obstacles visible.",
+        "Do not infer participant identity, intent or manipulation from a shape."
+      ]
+    },
+    {
+      "id": "confirmation",
+      "title": "Separate candidates from confirmation",
+      "body": "A candidate has the expected geometry. A confirmed example also satisfies a rule chosen beforehand, such as a completed close outside a boundary. Confirmation cannot eliminate false signals.",
+      "points": [
+        "Wait for the bar to finish before classifying its final shape.",
+        "A wick beyond a level differs from a close beyond it.",
+        "Retests are optional and may never occur.",
+        "Historical labels must not depend on future information unavailable at signal time."
+      ]
+    },
+    {
+      "id": "risk",
+      "title": "Plan hypothetical risk",
+      "body": "An invalidation level marks where a scenario loses its basis. A stop order is an execution tool and can fill beyond the intended level during gaps or poor liquidity.",
+      "points": [
+        "For simple cash equities: units = floor(cash risk budget / abs(entry - stop)).",
+        "Example only: a 500-unit cash risk budget and 5-unit price distance imply 100 shares before costs. This is arithmetic, not an allocation recommendation.",
+        "Planned reward-to-risk = abs(target - entry) / abs(entry - stop). Reject zero distance and targets on the wrong side.",
+        "Include spread, fees, slippage and gap risk. Contracts and leveraged products need multipliers and additional analysis.",
+        "A candidate can be skipped when nearby opposing structure leaves too little room."
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "Evaluate evidence",
+      "body": "This library supplies no win rates and implements no trading strategy. A recognizable historical shape is not proof of positive returns.",
+      "points": [
+        "Define market, timeframe, entries, exits and costs before testing.",
+        "Include failures and ambiguous examples.",
+        "Keep development data separate from evaluation data.",
+        "Report sample size, expectancy and drawdown alongside any win rate.",
+        "Volume can add context where meaningful; it is not a universal guarantee."
+      ]
+    },
+    {
+      "id": "data",
+      "title": "Check the market data",
+      "body": "Candles and gaps depend on session settings, liquidity and data quality. Missing records or inconsistent corporate-action adjustments can create misleading formations.",
+      "points": [
+        "Use one instrument, timezone, session definition and adjustment policy per series.",
+        "Reject non-finite values and records where high < max(open, close) or low > min(open, close).",
+        "Handle zero-range candles before calculating ratios.",
+        "All diagrams here use invented values and are not historical evidence."
+      ]
+    },
+    {
+      "id": "scanner",
+      "title": "Before building automated detection",
+      "body": "The supplied module is an educational content library, not an automatic detector. A production scanner needs precise definitions, appropriate data and independent evaluation.",
+      "points": [
+        "Parameterize body size, wick ratios, trend lookback, gaps and near-equality tolerances.",
+        "Common ratios such as 2:1 are heuristics rather than universal thresholds.",
+        "Distinguish candidate, confirmed and invalidated states.",
+        "Do not add unsupported accuracy percentages or confidence scores."
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "id": "ascending-channel",
+      "name": "Ascending Channel",
+      "category": "chart",
+      "type": "trend",
+      "bias": "bullish",
+      "context": "During higher highs and higher lows.",
+      "recognition": [
+        "Lower line joins higher lows.",
+        "upper line tracks higher highs.",
+        "approximately parallel spacing."
+      ],
+      "overview": "The structure describes an upward trend.",
+      "confirmation": "Lower-boundary break warns of weakness; upper-boundary break may indicate acceleration.",
+      "invalidation": "For a bearish break thesis, recovery into channel and new highs weaken it.",
+      "cautions": [
+        "The channel is not inherently bearish; a downside break can lead to consolidation."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Ascending channel: possible downward break",
+          "kind": "line",
+          "values": [
+            80,
+            100,
+            86,
+            106,
+            92,
+            112,
+            98,
+            89
+          ],
+          "guides": [
+            [
+              0,
+              80,
+              6,
+              98
+            ],
+            [
+              1,
+              100,
+              5,
+              112
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "ascending-triangle",
+      "name": "Ascending Triangle",
+      "category": "chart",
+      "type": "continuation",
+      "bias": "bullish",
+      "context": "Often within an uptrend; can also form a base.",
+      "recognition": [
+        "Approximately flat resistance.",
+        "successively higher lows.",
+        "converging boundaries."
+      ],
+      "overview": "Pullbacks become shallower while price keeps testing a ceiling.",
+      "confirmation": "Close above horizontal resistance.",
+      "invalidation": "Sustained break below rising support.",
+      "cautions": [
+        "No universal high win rate follows from this shape."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "A common illustration projects the widest relevant formation height from the breakout in its direction. This is not a probability or return estimate.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Ascending triangle",
+          "kind": "line",
+          "values": [
+            80,
+            105,
+            87,
+            105,
+            94,
+            105,
+            100,
+            112
+          ],
+          "guides": [
+            [
+              0,
+              80,
+              6,
+              100
+            ],
+            [
+              1,
+              105,
+              6,
+              105
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "bearish-counterattack",
+      "name": "Bearish Counterattack",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After a rally with a gap higher.",
+      "recognition": [
+        "Long bullish first candle.",
+        "bearish second opens higher.",
+        "closes approximately match."
+      ],
+      "overview": "A stronger opening is erased by the end of the period.",
+      "confirmation": "Later close below second low or local support.",
+      "invalidation": "Sustained move above pair high.",
+      "cautions": [
+        "A failed extension does not by itself establish a new downtrend."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bearish Counterattack formation",
+          "kind": "candles",
+          "bars": [
+            [
+              102,
+              115,
+              101,
+              114
+            ],
+            [
+              123,
+              124,
+              113,
+              114
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bearish-engulfing",
+      "name": "Bearish Engulfing",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance or a bounce into resistance.",
+      "recognition": [
+        "Bullish first body.",
+        "bearish second body contains the first real body.",
+        "wicks need not be contained."
+      ],
+      "overview": "The upward move in the first period is overtaken by downward movement.",
+      "confirmation": "Later close below the pair low or nearby support.",
+      "invalidation": "Sustained break above the pair high.",
+      "cautions": [
+        "A shape does not reveal who is selling or guarantee the next candle's direction."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bearish Engulfing formation",
+          "kind": "candles",
+          "bars": [
+            [
+              103,
+              110,
+              101,
+              109
+            ],
+            [
+              112,
+              113,
+              100,
+              101
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bearish-harami",
+      "name": "Bearish Harami",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "During an advance.",
+      "recognition": [
+        "Large bullish body.",
+        "smaller usually bearish body inside it.",
+        "wicks may extend beyond the first body."
+      ],
+      "overview": "Upward progress pauses, creating a possible loss of momentum.",
+      "confirmation": "Later close below the first body's lower edge; a low break is stricter.",
+      "invalidation": "New high above the formation.",
+      "cautions": [
+        "A small contained body can precede continued gains as well as a reversal."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bearish Harami formation",
+          "kind": "candles",
+          "bars": [
+            [
+              101,
+              114,
+              99,
+              113
+            ],
+            [
+              109,
+              110,
+              103,
+              104
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bearish-marubozu",
+      "name": "Bearish Marubozu",
+      "category": "candlestick",
+      "type": "momentum",
+      "bias": "bearish",
+      "context": "Within a decline, at a breakdown, or near a possible top.",
+      "recognition": [
+        "Open near high.",
+        "close near low.",
+        "very small or absent wicks."
+      ],
+      "overview": "The period ends near its weakest traded price.",
+      "confirmation": "Further weakness below the low or a failed support retest.",
+      "invalidation": "Sustained move above candle high.",
+      "cautions": [
+        "After a steep decline, one large candle can be a final burst of selling."
+      ],
+      "aliases": [
+        "Black Marubozu"
+      ],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Bearish Marubozu formation",
+          "kind": "candles",
+          "bars": [
+            [
+              112,
+              112,
+              96,
+              96
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "broadening-formation",
+      "name": "Broadening Formation",
+      "category": "chart",
+      "type": "expansion",
+      "bias": "neutral",
+      "context": "In a volatile range or near a possible transition.",
+      "recognition": [
+        "Boundaries diverge.",
+        "common megaphone has higher highs and lower lows.",
+        "tilted variants may rise or fall."
+      ],
+      "overview": "The distribution of traded prices widens rather than compresses.",
+      "confirmation": "Boundary break with follow-through; direction is unresolved beforehand.",
+      "invalidation": "Rapid return inside the expanding range.",
+      "cautions": [
+        "Large swings create wide risk distances and do not prove manipulation."
+      ],
+      "aliases": [
+        "Megaphone"
+      ],
+      "variants": [
+        "Ascending broadening structures have two rising, diverging boundaries. Descending broadening structures have two falling, diverging boundaries. The horizontal megaphone expands in both directions."
+      ],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Megaphone: upward resolution",
+          "kind": "line",
+          "values": [
+            100,
+            106,
+            94,
+            112,
+            88,
+            118,
+            82,
+            128
+          ],
+          "guides": [
+            [
+              1,
+              106,
+              5,
+              118
+            ],
+            [
+              2,
+              94,
+              6,
+              82
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Megaphone: downward resolution",
+          "kind": "line",
+          "values": [
+            100,
+            94,
+            106,
+            88,
+            112,
+            82,
+            118,
+            72
+          ],
+          "guides": [
+            [
+              1,
+              94,
+              5,
+              82
+            ],
+            [
+              2,
+              106,
+              6,
+              118
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "bullish-counterattack",
+      "name": "Bullish Counterattack",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline with a gap lower.",
+      "recognition": [
+        "Long bearish first candle.",
+        "bullish second opens lower.",
+        "closes approximately match."
+      ],
+      "overview": "The second period repairs its weak opening but does not necessarily engulf the first body.",
+      "confirmation": "Later break above second high or local resistance.",
+      "invalidation": "Loss of two-candle low.",
+      "cautions": [
+        "Matching the prior close differs from on-neck, whose reference is the prior low."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bullish Counterattack formation",
+          "kind": "candles",
+          "bars": [
+            [
+              114,
+              115,
+              102,
+              103
+            ],
+            [
+              94,
+              104,
+              93,
+              103
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bullish-engulfing",
+      "name": "Bullish Engulfing",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline or a pullback into support.",
+      "recognition": [
+        "Bearish first body.",
+        "bullish second body contains the first body from open to close.",
+        "wick containment is unnecessary."
+      ],
+      "overview": "The second period more than offsets the first body's downward movement.",
+      "confirmation": "Later close above the pair high or relevant resistance.",
+      "invalidation": "Break below the pair low.",
+      "cautions": [
+        "A very large second candle can create an impractically wide risk distance."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bullish Engulfing formation",
+          "kind": "candles",
+          "bars": [
+            [
+              109,
+              110,
+              101,
+              103
+            ],
+            [
+              101,
+              113,
+              100,
+              112
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bullish-harami",
+      "name": "Bullish Harami",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "During a decline.",
+      "recognition": [
+        "Large bearish body.",
+        "smaller usually bullish body inside it.",
+        "compare body boundaries, not entire ranges."
+      ],
+      "overview": "The decline pauses and net movement contracts.",
+      "confirmation": "Later close above the first body's upper edge; a high break is stricter.",
+      "invalidation": "New low below the formation.",
+      "cautions": [
+        "An inside bar requires high-low containment and is a related but different definition."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Bullish Harami formation",
+          "kind": "candles",
+          "bars": [
+            [
+              113,
+              114,
+              99,
+              101
+            ],
+            [
+              104,
+              110,
+              103,
+              109
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bullish-marubozu",
+      "name": "Bullish Marubozu",
+      "category": "candlestick",
+      "type": "momentum",
+      "bias": "bullish",
+      "context": "Within a trend, at a breakout, or at a possible recovery point.",
+      "recognition": [
+        "Open near low.",
+        "close near high.",
+        "body occupies nearly all the range."
+      ],
+      "overview": "The period ends near its strongest traded price.",
+      "confirmation": "Follow-through above the high or a successful breakout retest.",
+      "invalidation": "Loss of candle low is a broad structural reference.",
+      "cautions": [
+        "This is not automatically a reversal and does not measure traded volume."
+      ],
+      "aliases": [
+        "White Marubozu"
+      ],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Bullish Marubozu formation",
+          "kind": "candles",
+          "bars": [
+            [
+              96,
+              112,
+              96,
+              112
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "bump-and-run",
+      "name": "Bump and Run",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "conditional",
+      "context": "After a trend accelerates sharply from its earlier pace.",
+      "recognition": [
+        "Orderly lead-in.",
+        "steeper bump away from lead-in boundary.",
+        "reversal through that boundary starts the run."
+      ],
+      "overview": "An accelerated move loses support from its earlier trend structure.",
+      "confirmation": "Top: close below lead-in support. Mirrored bottom: above lead-in resistance.",
+      "invalidation": "Failed trendline break followed by renewed movement toward the extreme.",
+      "cautions": [
+        "Angles depend on screen scale; the pattern does not reveal deceptive intent."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Top: lead-in, bump, run",
+          "kind": "line",
+          "values": [
+            80,
+            86,
+            83,
+            91,
+            88,
+            105,
+            128,
+            139,
+            119,
+            104,
+            91,
+            79
+          ],
+          "guides": [
+            [
+              0,
+              80,
+              10,
+              100
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Mirrored bottom",
+          "kind": "line",
+          "values": [
+            120,
+            114,
+            117,
+            109,
+            112,
+            95,
+            72,
+            61,
+            81,
+            96,
+            109,
+            121
+          ],
+          "guides": [
+            [
+              0,
+              120,
+              10,
+              100
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "cup-and-handle",
+      "name": "Cup and Handle",
+      "category": "chart",
+      "type": "continuation",
+      "bias": "conditional",
+      "context": "Usually a rounded consolidation in an uptrend; inverse version is bearish.",
+      "recognition": [
+        "Rounded cup instead of one sharp V.",
+        "smaller handle near the rim.",
+        "inverse mirrors shape and direction."
+      ],
+      "overview": "A longer recovery and a smaller pause precede an attempted breakout.",
+      "confirmation": "Regular: close above handle and rim. Inverse: close below corresponding support.",
+      "invalidation": "Regular: loss of handle low. Inverse: break above handle high.",
+      "cautions": [
+        "A deep or prolonged handle can indicate a different structure."
+      ],
+      "aliases": [
+        "Cup with Handle",
+        "Inverted Cup and Handle"
+      ],
+      "variants": [],
+      "targetMethod": "Cup depth can be projected from the rim breakout. Consider handle failure and nearer price obstacles before the projection.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Cup with handle",
+          "kind": "line",
+          "values": [
+            112,
+            104,
+            98,
+            95,
+            96,
+            100,
+            106,
+            112,
+            107,
+            109,
+            116
+          ],
+          "guides": [
+            [
+              0,
+              112,
+              10,
+              112
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Inverted cup with handle",
+          "kind": "line",
+          "values": [
+            88,
+            96,
+            102,
+            105,
+            104,
+            100,
+            94,
+            88,
+            93,
+            91,
+            84
+          ],
+          "guides": [
+            [
+              0,
+              88,
+              10,
+              88
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "dark-cloud-cover",
+      "name": "Dark Cloud Cover",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After a rally.",
+      "recognition": [
+        "Large bullish first candle.",
+        "second opens above prior high classically.",
+        "bearish close below first-body midpoint but above first open."
+      ],
+      "overview": "An initially stronger opening gives way to a meaningful retreat.",
+      "confirmation": "Later close below formation low.",
+      "invalidation": "Sustained move above formation high.",
+      "cautions": [
+        "If the second body fully contains the first, bearish engulfing is the more fitting label."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Dark Cloud Cover formation",
+          "kind": "candles",
+          "bars": [
+            [
+              102,
+              115,
+              100,
+              114
+            ],
+            [
+              117,
+              118,
+              106,
+              107
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "descending-channel",
+      "name": "Descending Channel",
+      "category": "chart",
+      "type": "trend",
+      "bias": "bearish",
+      "context": "During lower highs and lower lows.",
+      "recognition": [
+        "Upper line joins lower highs.",
+        "lower line tracks lower lows.",
+        "boundaries approximately parallel."
+      ],
+      "overview": "The structure describes a downward trend.",
+      "confirmation": "Upper-boundary break can suggest recovery; lower-boundary break can indicate acceleration.",
+      "invalidation": "For a recovery thesis, failure back inside and new lows weaken it.",
+      "cautions": [
+        "The channel is not inherently a bullish reversal; an upward break can lead only to sideways movement."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Descending channel: possible upward break",
+          "kind": "line",
+          "values": [
+            120,
+            100,
+            114,
+            94,
+            108,
+            88,
+            102,
+            111
+          ],
+          "guides": [
+            [
+              0,
+              120,
+              6,
+              102
+            ],
+            [
+              1,
+              100,
+              5,
+              88
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "descending-triangle",
+      "name": "Descending Triangle",
+      "category": "chart",
+      "type": "continuation",
+      "bias": "bearish",
+      "context": "Often within a downtrend; can also form a top.",
+      "recognition": [
+        "Approximately flat support.",
+        "successively lower highs.",
+        "converging boundaries."
+      ],
+      "overview": "Rebounds weaken against a repeatedly tested floor.",
+      "confirmation": "Close below horizontal support.",
+      "invalidation": "Sustained break above descending upper boundary.",
+      "cautions": [
+        "Upside resolution is possible despite the conventional bearish bias."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "A common illustration projects the widest relevant formation height from the breakout in its direction. This is not a probability or return estimate.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Descending triangle",
+          "kind": "line",
+          "values": [
+            120,
+            95,
+            113,
+            95,
+            106,
+            95,
+            100,
+            88
+          ],
+          "guides": [
+            [
+              0,
+              120,
+              6,
+              100
+            ],
+            [
+              1,
+              95,
+              6,
+              95
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "diamond",
+      "name": "Diamond",
+      "category": "chart",
+      "type": "reversal-or-continuation",
+      "bias": "conditional",
+      "context": "Often near a turning area, though continuation is possible.",
+      "recognition": [
+        "Swings first widen then narrow.",
+        "early expansion becomes later contraction.",
+        "symmetry is approximate."
+      ],
+      "overview": "Price disagreement expands and then compresses before a potential breakout.",
+      "confirmation": "Close beyond a final contracting boundary in the actual breakout direction.",
+      "invalidation": "Return inside and movement through opposite boundary.",
+      "cautions": [
+        "Subjective and relatively uncommon; avoid forcing a diamond onto arbitrary noise."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "A common illustration projects the widest relevant formation height from the breakout in its direction. This is not a probability or return estimate.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Diamond: upward resolution",
+          "kind": "line",
+          "values": [
+            100,
+            104,
+            92,
+            114,
+            85,
+            109,
+            92,
+            105,
+            98,
+            113
+          ],
+          "guides": [
+            [
+              0,
+              100,
+              4,
+              85
+            ],
+            [
+              1,
+              104,
+              3,
+              114
+            ],
+            [
+              3,
+              114,
+              8,
+              101
+            ],
+            [
+              4,
+              85,
+              8,
+              98
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Diamond: downward resolution",
+          "kind": "line",
+          "values": [
+            100,
+            96,
+            108,
+            86,
+            115,
+            91,
+            108,
+            95,
+            102,
+            87
+          ],
+          "guides": [
+            [
+              0,
+              100,
+              4,
+              115
+            ],
+            [
+              1,
+              96,
+              3,
+              86
+            ],
+            [
+              3,
+              86,
+              8,
+              99
+            ],
+            [
+              4,
+              115,
+              8,
+              102
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "double-bottom",
+      "name": "Double Bottom",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline.",
+      "recognition": [
+        "Two separated lows near one zone.",
+        "meaningful rebound between them.",
+        "rebound high defines neckline resistance."
+      ],
+      "overview": "A possible base develops as downward progress slows.",
+      "confirmation": "Close above intervening high; retest is optional.",
+      "invalidation": "Loss of second low or failed breakout below neckline.",
+      "cautions": [
+        "Lows need not be exactly equal; define acceptable variation beforehand."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "Illustrative convention: add base-to-neckline height to breakout price. Nearby resistance may interrupt the move.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Double bottom",
+          "kind": "line",
+          "values": [
+            110,
+            90,
+            102,
+            91,
+            104,
+            112
+          ],
+          "guides": [
+            [
+              1,
+              102,
+              4,
+              102
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "double-top",
+      "name": "Double Top",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance.",
+      "recognition": [
+        "Two separated peaks near one zone.",
+        "meaningful trough between them.",
+        "trough defines neckline support."
+      ],
+      "overview": "Two rallies fail to sustain new highs, but a reversal still needs a support break.",
+      "confirmation": "Close below the intervening trough; failed retest can add evidence.",
+      "invalidation": "Recovery above second peak or sustained neckline reclamation.",
+      "cautions": [
+        "Two highs alone are a candidate, not a confirmed reversal."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "Illustrative convention: subtract peak-to-neckline height from breakdown price. This is a scenario, not a promised destination.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Double top",
+          "kind": "line",
+          "values": [
+            80,
+            100,
+            88,
+            99,
+            86,
+            79
+          ],
+          "guides": [
+            [
+              1,
+              88,
+              4,
+              88
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "downside-tasuki-gap",
+      "name": "Downside Tasuki Gap",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bearish",
+      "context": "During a downtrend with a downward gap.",
+      "recognition": [
+        "Two bearish candles separated by a gap.",
+        "bullish third opens inside second body.",
+        "third close partially fills gap."
+      ],
+      "overview": "The attempted rebound fails to repair the complete gap.",
+      "confirmation": "Renewed weakness with gap intact or close below formation low.",
+      "invalidation": "Full gap recovery and acceptance above it.",
+      "cautions": [
+        "Classical gaps may be uncommon in continuously traded markets."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Downside Tasuki Gap formation",
+          "kind": "candles",
+          "bars": [
+            [
+              119,
+              120,
+              109,
+              110
+            ],
+            [
+              104,
+              105,
+              95,
+              96
+            ],
+            [
+              98,
+              108.5,
+              97,
+              108
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "evening-star",
+      "name": "Evening Star",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance.",
+      "recognition": [
+        "Large bullish body, small middle body, then bearish body.",
+        "third close falls below first-body midpoint.",
+        "gaps strengthen classical structure."
+      ],
+      "overview": "An advance pauses before a meaningful decline appears.",
+      "confirmation": "Completed third candle below midpoint; later low break is stricter.",
+      "invalidation": "Break above sequence high.",
+      "cautions": [
+        "The middle candle can have a small nonzero body; an exact doji is a variant."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Evening Star formation",
+          "kind": "candles",
+          "bars": [
+            [
+              102,
+              116,
+              100,
+              115
+            ],
+            [
+              119,
+              122,
+              117,
+              120
+            ],
+            [
+              116,
+              117,
+              105,
+              106
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "falling-three-methods",
+      "name": "Falling Three Methods",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bearish",
+      "context": "During a downtrend.",
+      "recognition": [
+        "Long bearish candle.",
+        "typically three small recovery candles inside its range.",
+        "final bearish close below first close."
+      ],
+      "overview": "A contained recovery is followed by renewed selling.",
+      "confirmation": "Final close completes the sequence; a close below first low is stricter.",
+      "invalidation": "Recovery above first high breaks containment.",
+      "cautions": [
+        "Not every five-candle sequence with a downward bias qualifies."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 5,
+      "illustrations": [
+        {
+          "label": "Falling Three Methods formation",
+          "kind": "candles",
+          "bars": [
+            [
+              114,
+              115,
+              96,
+              98
+            ],
+            [
+              100,
+              105,
+              99,
+              104
+            ],
+            [
+              103,
+              108,
+              102,
+              107
+            ],
+            [
+              106,
+              111,
+              105,
+              110
+            ],
+            [
+              109,
+              110,
+              93,
+              94
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "falling-window",
+      "name": "Falling Window",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bearish",
+      "context": "During a decline or range breakdown.",
+      "recognition": [
+        "Current high below preceding low.",
+        "complete ranges separated.",
+        "candle colors can vary."
+      ],
+      "overview": "A downward gap leaves a possible overhead resistance area.",
+      "confirmation": "Failed gap recovery followed by lower prices.",
+      "invalidation": "Full gap recovery and sustained trading above upper edge.",
+      "cautions": [
+        "Verify the data and session settings before interpreting a discontinuity."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Falling Window formation",
+          "kind": "candles",
+          "bars": [
+            [
+              119,
+              120,
+              109,
+              111
+            ],
+            [
+              104,
+              105,
+              96,
+              98
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "flag",
+      "name": "Flag",
+      "category": "chart",
+      "type": "continuation",
+      "bias": "conditional",
+      "context": "After a clear upward or downward impulse.",
+      "recognition": [
+        "Distinct pole.",
+        "compact near-parallel consolidation.",
+        "pause often slopes against the prior impulse."
+      ],
+      "overview": "A short pause interrupts a strong move.",
+      "confirmation": "Close outside the flag in the impulse direction.",
+      "invalidation": "Deep retracement erasing impulse or a failed break through far boundary.",
+      "cautions": [
+        "A long drifting range without a pole is not automatically a flag."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The pole length is sometimes projected from the breakout. An extended impulse can make this idealized projection unrealistic.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Bull flag",
+          "kind": "line",
+          "values": [
+            75,
+            112,
+            103,
+            109,
+            100,
+            106,
+            97,
+            116
+          ],
+          "guides": [
+            [
+              1,
+              112,
+              5,
+              106
+            ],
+            [
+              2,
+              103,
+              6,
+              97
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Bear flag",
+          "kind": "line",
+          "values": [
+            125,
+            88,
+            97,
+            91,
+            100,
+            94,
+            103,
+            84
+          ],
+          "guides": [
+            [
+              1,
+              88,
+              5,
+              94
+            ],
+            [
+              2,
+              97,
+              6,
+              103
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "hammer",
+      "name": "Hammer",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline near support.",
+      "recognition": [
+        "Small body near the high.",
+        "lower wick commonly at least twice the body.",
+        "little upper wick."
+      ],
+      "overview": "A move lower is rejected before the period ends, creating a potential recovery candidate.",
+      "confirmation": "Later close above the hammer high.",
+      "invalidation": "Sustained break below its low.",
+      "cautions": [
+        "Either body color is possible. The same geometry after a rally is a hanging man."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Hammer formation",
+          "kind": "candles",
+          "bars": [
+            [
+              105,
+              108,
+              92,
+              107
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "hanging-man",
+      "name": "Hanging Man",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance, especially near resistance.",
+      "recognition": [
+        "Small body near the high.",
+        "long lower wick.",
+        "little upper wick."
+      ],
+      "overview": "A deep sell-off interrupts the rally even though the candle recovers.",
+      "confirmation": "Later close below its low or nearby support.",
+      "invalidation": "Sustained advance above its high.",
+      "cautions": [
+        "Recovery within the candle can also reflect continuing demand. Context separates this from a hammer."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Hanging Man formation",
+          "kind": "candles",
+          "bars": [
+            [
+              107,
+              108,
+              92,
+              105
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "head-and-shoulders",
+      "name": "Head and Shoulders",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "conditional",
+      "context": "Regular version after an advance; inverse after a decline.",
+      "recognition": [
+        "Regular: middle peak higher than shoulders.",
+        "inverse: middle trough lower than shoulders.",
+        "neckline joins intervening reactions."
+      ],
+      "overview": "A failed extension of the prior trend creates a possible turning structure.",
+      "confirmation": "Regular: close below neckline. Inverse: close above neckline.",
+      "invalidation": "Failed neckline break; movement beyond right shoulder is a common structural reference.",
+      "cautions": [
+        "Shoulders can differ and necklines can slope. A break is not certainty."
+      ],
+      "aliases": [
+        "Inverse Head and Shoulders"
+      ],
+      "variants": [],
+      "targetMethod": "Measure vertically from head to neckline at the head, then project from the breakout in its direction. Mirror the construction for an inverse formation.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Regular top",
+          "kind": "line",
+          "values": [
+            85,
+            105,
+            94,
+            116,
+            95,
+            104,
+            91,
+            82
+          ],
+          "guides": [
+            [
+              2,
+              94,
+              6,
+              96
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Inverse bottom",
+          "kind": "line",
+          "values": [
+            115,
+            95,
+            106,
+            84,
+            105,
+            96,
+            109,
+            118
+          ],
+          "guides": [
+            [
+              2,
+              106,
+              6,
+              104
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "high-wave-candle",
+      "name": "High-Wave Candle",
+      "category": "candlestick",
+      "type": "indecision",
+      "bias": "neutral",
+      "context": "During volatile disagreement.",
+      "recognition": [
+        "Small real body.",
+        "long upper and lower wicks.",
+        "range large relative to recent candles."
+      ],
+      "overview": "Large excursions coexist with limited net movement.",
+      "confirmation": "Later break and hold outside the range.",
+      "invalidation": "Quick return inside after a break.",
+      "cautions": [
+        "It overlaps with spinning-top and doji families; labels are not perfectly separate mathematical categories."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "High-Wave Candle formation",
+          "kind": "candles",
+          "bars": [
+            [
+              103,
+              122,
+              82,
+              106
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "horizontal-channel",
+      "name": "Horizontal Channel",
+      "category": "chart",
+      "type": "range",
+      "bias": "neutral",
+      "context": "While price rotates between a floor and ceiling.",
+      "recognition": [
+        "At least two meaningful tests at each boundary.",
+        "roughly horizontal support and resistance.",
+        "use zones."
+      ],
+      "overview": "Sideways movement persists without a clear slope.",
+      "confirmation": "Close outside range starts a breakout scenario; retest is optional.",
+      "invalidation": "Return inside weakens breakout; boundary failure invalidates range-holding thesis.",
+      "cautions": [
+        "Repeated range behavior can end abruptly, and the middle offers little structural clarity."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "A common illustration projects the widest relevant formation height from the breakout in its direction. This is not a probability or return estimate.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Range: upward break",
+          "kind": "line",
+          "values": [
+            92,
+            108,
+            93,
+            107,
+            92,
+            108,
+            93,
+            116
+          ],
+          "guides": [
+            [
+              0,
+              92,
+              6,
+              92
+            ],
+            [
+              1,
+              108,
+              6,
+              108
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Range: downward break",
+          "kind": "line",
+          "values": [
+            108,
+            92,
+            107,
+            93,
+            108,
+            92,
+            107,
+            84
+          ],
+          "guides": [
+            [
+              0,
+              108,
+              6,
+              108
+            ],
+            [
+              1,
+              92,
+              6,
+              92
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "inverted-hammer",
+      "name": "Inverted Hammer",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline.",
+      "recognition": [
+        "Small body near the low.",
+        "long upper wick.",
+        "short lower wick."
+      ],
+      "overview": "An upward attempt interrupts weakness, but much of that attempt is given back.",
+      "confirmation": "Later close above the candle high.",
+      "invalidation": "New low below the formation.",
+      "cautions": [
+        "The upward wick alone is not proof of a bottom; follow-through is especially important."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Inverted Hammer formation",
+          "kind": "candles",
+          "bars": [
+            [
+              94,
+              109,
+              93,
+              96
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "long-legged-doji",
+      "name": "Long-Legged Doji",
+      "category": "candlestick",
+      "type": "indecision",
+      "bias": "neutral",
+      "context": "At a decision area in a trend or range.",
+      "recognition": [
+        "Nearly equal open and close.",
+        "prominent upper and lower wicks.",
+        "meaningful total range."
+      ],
+      "overview": "Wide movement produces little net progress, suggesting disagreement.",
+      "confirmation": "Later close beyond the high or low may resolve the range.",
+      "invalidation": "Re-entry after a breakout weakens that breakout scenario.",
+      "cautions": [
+        "It is not inherently continuation, and little net movement does not imply low volume."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Long-Legged Doji formation",
+          "kind": "candles",
+          "bars": [
+            [
+              103,
+              116,
+              89,
+              103.2
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "mat-hold",
+      "name": "Mat Hold",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bullish",
+      "context": "During an established uptrend.",
+      "recognition": [
+        "Five candles: strong bullish first.",
+        "gapped-up small bearish second.",
+        "two small pullback candles.",
+        "bullish fifth above the pause."
+      ],
+      "overview": "A shallow interruption follows a strong advance and resolves upward.",
+      "confirmation": "Fifth close above the pause and second opening level.",
+      "invalidation": "Deep retracement below first low damages the premise.",
+      "cautions": [
+        "A bearish mirror is sometimes used, but definitions differ across references."
+      ],
+      "aliases": [],
+      "variants": [
+        "This card teaches the bullish five-candle form. A bearish mirror uses a downward first candle, gap down, shallow recovery and final downward extension; conventions vary."
+      ],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 5,
+      "illustrations": [
+        {
+          "label": "Mat Hold formation",
+          "kind": "candles",
+          "bars": [
+            [
+              94,
+              111,
+              93,
+              110
+            ],
+            [
+              115,
+              116,
+              112,
+              113
+            ],
+            [
+              112,
+              113,
+              107,
+              108
+            ],
+            [
+              108,
+              110,
+              105,
+              107
+            ],
+            [
+              108,
+              120,
+              107,
+              119
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "morning-star",
+      "name": "Morning Star",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline.",
+      "recognition": [
+        "Large bearish body, small middle body, then bullish body.",
+        "third close exceeds first-body midpoint.",
+        "classical versions have body gaps."
+      ],
+      "overview": "Downward momentum slows and is followed by a recovery.",
+      "confirmation": "Completed third candle above midpoint; later high break is stricter.",
+      "invalidation": "Break below sequence low.",
+      "cautions": [
+        "The middle candle need not be a doji. Gap-free versions are adaptations."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Morning Star formation",
+          "kind": "candles",
+          "bars": [
+            [
+              115,
+              116,
+              100,
+              102
+            ],
+            [
+              98,
+              100,
+              95,
+              97
+            ],
+            [
+              101,
+              112,
+              100,
+              111
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "on-neck-pattern",
+      "name": "On-Neck Pattern",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bearish",
+      "context": "Within an existing downtrend.",
+      "recognition": [
+        "Long bearish first candle.",
+        "bullish second opens below first low.",
+        "second close near first low."
+      ],
+      "overview": "The recovery is shallow and repairs little of the earlier decline.",
+      "confirmation": "Later break below second low.",
+      "invalidation": "Recovery deep into the first body weakens the shallow-rebound premise.",
+      "cautions": [
+        "Use the prior low as reference, not the prior close. This is conventionally a bearish continuation candidate."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "On-Neck Pattern formation",
+          "kind": "candles",
+          "bars": [
+            [
+              115,
+              116,
+              101,
+              103
+            ],
+            [
+              97,
+              102,
+              96,
+              101
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "pennant",
+      "name": "Pennant",
+      "category": "chart",
+      "type": "continuation",
+      "bias": "conditional",
+      "context": "After a strong directional impulse.",
+      "recognition": [
+        "Clear pole.",
+        "compact pause with lower highs and higher lows.",
+        "converging boundaries."
+      ],
+      "overview": "A short contraction interrupts the previous impulse.",
+      "confirmation": "Close outside in prior impulse direction; opposite break requires reassessment.",
+      "invalidation": "Re-entry followed by movement through the opposite boundary.",
+      "cautions": [
+        "No fixed five-wave count is required. Without a pole, consider a triangle instead."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The pole length is sometimes projected from the breakout. An extended impulse can make this idealized projection unrealistic.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Bull pennant",
+          "kind": "line",
+          "values": [
+            75,
+            110,
+            100,
+            108,
+            102,
+            106,
+            104,
+            115
+          ],
+          "guides": [
+            [
+              1,
+              110,
+              6,
+              105
+            ],
+            [
+              2,
+              100,
+              6,
+              104
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Bear pennant",
+          "kind": "line",
+          "values": [
+            125,
+            90,
+            100,
+            92,
+            98,
+            94,
+            96,
+            85
+          ],
+          "guides": [
+            [
+              2,
+              100,
+              6,
+              96
+            ],
+            [
+              1,
+              90,
+              6,
+              95
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "piercing-pattern",
+      "name": "Piercing Pattern",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline in a market with session gaps.",
+      "recognition": [
+        "Large bearish first candle.",
+        "second opens below the prior low in the classical version.",
+        "bullish close above first-body midpoint but below first open."
+      ],
+      "overview": "A weak opening is followed by a recovery deep into the previous body.",
+      "confirmation": "Later close above formation high.",
+      "invalidation": "Loss of formation low.",
+      "cautions": [
+        "An opening below the previous close but not its low is a relaxed variant and should be labeled separately."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Piercing Pattern formation",
+          "kind": "candles",
+          "bars": [
+            [
+              114,
+              115,
+              100,
+              102
+            ],
+            [
+              98,
+              110,
+              97,
+              109
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "rising-three-methods",
+      "name": "Rising Three Methods",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bullish",
+      "context": "During an uptrend.",
+      "recognition": [
+        "Long bullish candle.",
+        "typically three small countertrend candles inside its high-low range.",
+        "final bullish close above first close."
+      ],
+      "overview": "A contained pullback is followed by renewed upward progress.",
+      "confirmation": "Final close completes the sequence; a close above first high is stricter.",
+      "invalidation": "Pullback below first low damages containment.",
+      "cautions": [
+        "The traditional form has five candles; other pause lengths are variants."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 5,
+      "illustrations": [
+        {
+          "label": "Rising Three Methods formation",
+          "kind": "candles",
+          "bars": [
+            [
+              94,
+              112,
+              93,
+              110
+            ],
+            [
+              108,
+              109,
+              103,
+              104
+            ],
+            [
+              105,
+              107,
+              100,
+              101
+            ],
+            [
+              102,
+              104,
+              98,
+              99
+            ],
+            [
+              100,
+              115,
+              99,
+              114
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "rising-window",
+      "name": "Rising Window",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bullish",
+      "context": "During an upward move or base breakout.",
+      "recognition": [
+        "Current low above preceding high.",
+        "complete high-low ranges separated.",
+        "candle colors can vary."
+      ],
+      "overview": "An upward gap creates a possible support reference on a pullback.",
+      "confirmation": "Gap holds on retest and upward movement resumes.",
+      "invalidation": "Full gap fill and sustained trading below lower edge.",
+      "cautions": [
+        "News, session boundaries, corporate actions and missing data can all affect gaps."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Rising Window formation",
+          "kind": "candles",
+          "bars": [
+            [
+              96,
+              106,
+              95,
+              104
+            ],
+            [
+              111,
+              119,
+              110,
+              117
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "shooting-star",
+      "name": "Shooting Star",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After a rally into resistance.",
+      "recognition": [
+        "Small body near the low.",
+        "upper wick commonly at least twice the body.",
+        "short lower wick."
+      ],
+      "overview": "An attempt to extend the rally is rejected.",
+      "confirmation": "Later close below the star low.",
+      "invalidation": "Sustained break above the upper-wick high.",
+      "cautions": [
+        "Similar geometry after a decline is an inverted hammer, with a different interpretation."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Shooting Star formation",
+          "kind": "candles",
+          "bars": [
+            [
+              96,
+              110,
+              93,
+              94
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "spinning-top",
+      "name": "Spinning Top",
+      "category": "candlestick",
+      "type": "indecision",
+      "bias": "neutral",
+      "context": "Within a range or following a directional move.",
+      "recognition": [
+        "Small body relative to range.",
+        "visible wicks on both sides.",
+        "body more distinct than a doji."
+      ],
+      "overview": "Neither direction preserves much of its intraperiod movement.",
+      "confirmation": "Later directional close beyond the relevant local range.",
+      "invalidation": "Failed breakout and return inside the range.",
+      "cautions": [
+        "Body color alone does not establish a bullish or bearish forecast."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 1,
+      "illustrations": [
+        {
+          "label": "Spinning Top formation",
+          "kind": "candles",
+          "bars": [
+            [
+              103,
+              110,
+              97,
+              105
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "symmetrical-triangle",
+      "name": "Symmetrical Triangle",
+      "category": "chart",
+      "type": "consolidation",
+      "bias": "neutral",
+      "context": "Within a trend or broader range.",
+      "recognition": [
+        "Lower highs.",
+        "higher lows.",
+        "multiple swings between converging boundaries."
+      ],
+      "overview": "The range compresses without resolving direction.",
+      "confirmation": "Close above resistance or below support, followed by sustained movement.",
+      "invalidation": "Return inside and subsequent opposite-direction break.",
+      "cautions": [
+        "Neutral geometry does not mean exactly equal breakout probabilities."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "A common illustration projects the widest relevant formation height from the breakout in its direction. This is not a probability or return estimate.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Triangle: upward break",
+          "kind": "line",
+          "values": [
+            118,
+            85,
+            112,
+            91,
+            106,
+            97,
+            103,
+            114
+          ],
+          "guides": [
+            [
+              0,
+              118,
+              6,
+              100
+            ],
+            [
+              1,
+              85,
+              5,
+              97
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Triangle: downward break",
+          "kind": "line",
+          "values": [
+            82,
+            115,
+            88,
+            109,
+            94,
+            103,
+            97,
+            86
+          ],
+          "guides": [
+            [
+              0,
+              82,
+              6,
+              100
+            ],
+            [
+              1,
+              115,
+              5,
+              103
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "three-black-crows",
+      "name": "Three Black Crows",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance or distribution area.",
+      "recognition": [
+        "Three bearish candles with lower closes.",
+        "later opens usually within prior bodies.",
+        "closes near lows."
+      ],
+      "overview": "Weakness persists across successive periods.",
+      "confirmation": "Third close completes the sequence; assess nearby support separately.",
+      "invalidation": "Recovery above sequence high or sustained reclamation of broken support.",
+      "cautions": [
+        "Chasing an extended decline can leave exposure to a sharp rebound."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three Black Crows formation",
+          "kind": "candles",
+          "bars": [
+            [
+              113,
+              114,
+              104,
+              105
+            ],
+            [
+              109,
+              110,
+              99,
+              100
+            ],
+            [
+              104,
+              105,
+              93,
+              94
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "three-inside-down",
+      "name": "Three Inside Down",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance.",
+      "recognition": [
+        "Large bullish first body.",
+        "small second body inside it.",
+        "bearish third close below first open."
+      ],
+      "overview": "A bearish harami gains downward follow-through.",
+      "confirmation": "Third close completes this definition; a sequence-low break is stricter.",
+      "invalidation": "Break above sequence high.",
+      "cautions": [
+        "The second-body containment matters, not just the direction of the last candle."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three Inside Down formation",
+          "kind": "candles",
+          "bars": [
+            [
+              101,
+              115,
+              99,
+              114
+            ],
+            [
+              108,
+              109,
+              103,
+              104
+            ],
+            [
+              105,
+              106,
+              97,
+              98
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "three-inside-up",
+      "name": "Three Inside Up",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline.",
+      "recognition": [
+        "Large bearish first body.",
+        "small second body contained inside it.",
+        "bullish third close above first open."
+      ],
+      "overview": "A bullish harami is followed by more decisive upward progress.",
+      "confirmation": "Third close completes this definition; a sequence-high break is stricter.",
+      "invalidation": "Loss of sequence low.",
+      "cautions": [
+        "Three rising candles without the body-containment structure do not qualify."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three Inside Up formation",
+          "kind": "candles",
+          "bars": [
+            [
+              114,
+              115,
+              99,
+              101
+            ],
+            [
+              104,
+              109,
+              103,
+              108
+            ],
+            [
+              107,
+              117,
+              106,
+              116
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "three-outside-down",
+      "name": "Three Outside Down",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance.",
+      "recognition": [
+        "Bullish first body.",
+        "bearish engulfing second body.",
+        "bearish third closes below second close."
+      ],
+      "overview": "An engulfing decline persists for another period.",
+      "confirmation": "Third close, with support clearance checked separately.",
+      "invalidation": "Break above combined high.",
+      "cautions": [
+        "More confirmation also means a later entry and potentially a larger risk distance."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three Outside Down formation",
+          "kind": "candles",
+          "bars": [
+            [
+              103,
+              110,
+              101,
+              109
+            ],
+            [
+              112,
+              113,
+              100,
+              101
+            ],
+            [
+              103,
+              104,
+              95,
+              96
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "three-outside-up",
+      "name": "Three Outside Up",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline.",
+      "recognition": [
+        "Bearish first body.",
+        "bullish engulfing second body.",
+        "bullish third closes above second close."
+      ],
+      "overview": "An engulfing recovery persists for another period.",
+      "confirmation": "Third close, with resistance clearance checked separately.",
+      "invalidation": "Break below combined low.",
+      "cautions": [
+        "This expands on engulfing; it is not interchangeable with three inside up."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three Outside Up formation",
+          "kind": "candles",
+          "bars": [
+            [
+              109,
+              110,
+              101,
+              103
+            ],
+            [
+              101,
+              113,
+              100,
+              112
+            ],
+            [
+              110,
+              118,
+              109,
+              117
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "three-white-soldiers",
+      "name": "Three White Soldiers",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline or sustained base.",
+      "recognition": [
+        "Three meaningful bullish bodies with higher closes.",
+        "later opens usually within prior bodies.",
+        "relatively short upper wicks."
+      ],
+      "overview": "Upward progress persists across three periods instead of one rebound.",
+      "confirmation": "Third close completes the sequence; assess local resistance separately.",
+      "invalidation": "Loss of sequence base or failure of a related breakout.",
+      "cautions": [
+        "Oversized candles after an already extended rally can reflect exhaustion."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Three White Soldiers formation",
+          "kind": "candles",
+          "bars": [
+            [
+              94,
+              103,
+              93,
+              102
+            ],
+            [
+              99,
+              108,
+              98,
+              107
+            ],
+            [
+              104,
+              114,
+              103,
+              113
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "triple-bottom",
+      "name": "Triple Bottom",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a downward trend.",
+      "recognition": [
+        "Three separated lows near support.",
+        "intervening highs define resistance.",
+        "exact equality is unnecessary."
+      ],
+      "overview": "Repeated tests create a potential base.",
+      "confirmation": "Close above resistance joining rebound highs.",
+      "invalidation": "Loss of base lows or failed upside breakout.",
+      "cautions": [
+        "Repeated support tests can also end in a breakdown."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "Illustrative convention: add base-to-neckline height to breakout price. Nearby resistance may interrupt the move.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Triple bottom",
+          "kind": "line",
+          "values": [
+            110,
+            90,
+            101,
+            89,
+            102,
+            90,
+            105,
+            113
+          ],
+          "guides": [
+            [
+              1,
+              102,
+              6,
+              102
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "triple-top",
+      "name": "Triple Top",
+      "category": "chart",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an upward trend.",
+      "recognition": [
+        "Three separated peaks near resistance.",
+        "intervening troughs define support.",
+        "distinct swings rather than adjacent noise."
+      ],
+      "overview": "Repeated attempts at a ceiling fail, leaving support as the decision area.",
+      "confirmation": "Close below the support zone joining intervening troughs.",
+      "invalidation": "Break above peak zone or failed downside breakout.",
+      "cautions": [
+        "More touches do not establish a higher win rate."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "Illustrative convention: subtract peak-to-neckline height from breakdown price. This is a scenario, not a promised destination.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Triple top",
+          "kind": "line",
+          "values": [
+            80,
+            100,
+            89,
+            101,
+            88,
+            100,
+            85,
+            78
+          ],
+          "guides": [
+            [
+              1,
+              88,
+              6,
+              88
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    },
+    {
+      "id": "tweezer-bottom",
+      "name": "Tweezer Bottom",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bullish",
+      "context": "After a decline at support.",
+      "recognition": [
+        "Two neighboring lows near one level.",
+        "first candle often bearish and second bullish.",
+        "bodies need not match."
+      ],
+      "overview": "Repeated tests of a floor fail to produce lasting downward progress.",
+      "confirmation": "Later close above pair high or nearby resistance.",
+      "invalidation": "Sustained break below shared low.",
+      "cautions": [
+        "Near-equality needs a defined tick-size or volatility tolerance."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Tweezer Bottom formation",
+          "kind": "candles",
+          "bars": [
+            [
+              112,
+              113,
+              98,
+              101
+            ],
+            [
+              101,
+              111,
+              98,
+              110
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "tweezer-top",
+      "name": "Tweezer Top",
+      "category": "candlestick",
+      "type": "reversal",
+      "bias": "bearish",
+      "context": "After an advance into resistance.",
+      "recognition": [
+        "Two neighboring highs near one level.",
+        "first candle often bullish and second bearish.",
+        "bodies need not match."
+      ],
+      "overview": "Repeated tests of a ceiling fail to sustain higher prices.",
+      "confirmation": "Later close below pair low or nearby support.",
+      "invalidation": "Sustained break above shared high.",
+      "cautions": [
+        "Repeated touches can also precede a breakout; resistance is not guaranteed."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 2,
+      "illustrations": [
+        {
+          "label": "Tweezer Top formation",
+          "kind": "candles",
+          "bars": [
+            [
+              101,
+              115,
+              99,
+              112
+            ],
+            [
+              112,
+              115,
+              101,
+              102
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "upside-tasuki-gap",
+      "name": "Upside Tasuki Gap",
+      "category": "candlestick",
+      "type": "continuation",
+      "bias": "bullish",
+      "context": "During an uptrend with an upward gap.",
+      "recognition": [
+        "Two bullish candles separated by a gap.",
+        "bearish third opens inside second body.",
+        "third close partially fills gap."
+      ],
+      "overview": "A pullback leaves part of an upward gap intact.",
+      "confirmation": "Renewed upward progress with gap preserved or close above formation high.",
+      "invalidation": "Full gap fill and acceptance below its lower edge.",
+      "cautions": [
+        "Specify body-gap versus full-range-gap rules. The example uses a full-range gap."
+      ],
+      "aliases": [],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "candleCount": 3,
+      "illustrations": [
+        {
+          "label": "Upside Tasuki Gap formation",
+          "kind": "candles",
+          "bars": [
+            [
+              96,
+              106,
+              95,
+              105
+            ],
+            [
+              111,
+              120,
+              110,
+              119
+            ],
+            [
+              117,
+              118,
+              106.5,
+              107
+            ]
+          ],
+          "note": "Synthetic OHLC example. Prior trend and later confirmation are not plotted. Read the context before interpreting the shape."
+        }
+      ]
+    },
+    {
+      "id": "wedge",
+      "name": "Wedge",
+      "category": "chart",
+      "type": "reversal-or-continuation",
+      "bias": "conditional",
+      "context": "Within a trend or near a turning area.",
+      "recognition": [
+        "Both boundaries slope in the same direction and converge.",
+        "rising version has higher highs and lows.",
+        "falling version has lower highs and lows."
+      ],
+      "overview": "Progress continues but the available range narrows.",
+      "confirmation": "Rising wedge: close below lower boundary. Falling wedge: close above upper boundary.",
+      "invalidation": "Failed break back inside; opposite-boundary break further contradicts scenario.",
+      "cautions": [
+        "Wedges may reverse or continue trends. Parallel channels are a different structure."
+      ],
+      "aliases": [
+        "Rising Wedge",
+        "Falling Wedge"
+      ],
+      "variants": [],
+      "targetMethod": "The shape supplies no reliable fixed target. In a hypothetical study, compare nearby opposing support or resistance with the planned risk distance.",
+      "timeframeNote": "Use completed candles from one consistent timeframe. Session boundaries, liquidity, costs and noise affect interpretation.",
+      "reliability": {
+        "winRate": null,
+        "status": "Not backtested; no success-rate claim."
+      },
+      "illustrations": [
+        {
+          "label": "Rising wedge",
+          "kind": "line",
+          "values": [
+            90,
+            106,
+            99,
+            110,
+            107,
+            114,
+            112,
+            105
+          ],
+          "guides": [
+            [
+              0,
+              90,
+              6,
+              112
+            ],
+            [
+              1,
+              106,
+              5,
+              114
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        },
+        {
+          "label": "Falling wedge",
+          "kind": "line",
+          "values": [
+            110,
+            94,
+            101,
+            90,
+            93,
+            86,
+            88,
+            95
+          ],
+          "guides": [
+            [
+              0,
+              110,
+              6,
+              88
+            ],
+            [
+              1,
+              94,
+              5,
+              86
+            ]
+          ],
+          "note": "Synthetic swing schematic. Final segment shows one possible breakout, not a forecast. Time spacing is simplified."
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "title": "WIPO: Copyright protection",
+      "url": "https://www.wipo.int/en/web/copyright/protection",
+      "purpose": "Idea-expression distinction."
+    },
+    {
+      "title": "Government of India: Copyright handbook",
+      "url": "https://copyright.gov.in/documents/handbook.html",
+      "purpose": "Copyright scope; attribution is not permission."
+    },
+    {
+      "title": "Fidelity: What is technical analysis?",
+      "url": "https://www.fidelity.com/learning-center/trading-investing/technical-analysis/what-is-technical-analysis",
+      "purpose": "Limitations and uncertain outcomes."
+    },
+    {
+      "title": "TradingView: On Neck - Bearish",
+      "url": "https://www.tradingview.com/support/solutions/43000592722-on-neck-bearish/",
+      "purpose": "Checked bearish continuation and prior-low reference."
+    },
+    {
+      "title": "Schwab thinkorswim: Mat Hold",
+      "url": "https://toslc.thinkorswim.com/center/reference/Patterns/candlestick-patterns-library/bullish-only/MatHold",
+      "purpose": "Checked five-candle bullish form."
+    },
+    {
+      "title": "StockCharts: Candlestick Pattern Dictionary",
+      "url": "https://chartschool.stockcharts.com/table-of-contents/chart-analysis/candlestick-charts/candlestick-pattern-dictionary",
+      "purpose": "Checked body containment, star terminology and indecision."
+    },
+    {
+      "title": "StockCharts: Introduction to Chart Patterns",
+      "url": "https://chartschool.stockcharts.com/table-of-contents/chart-analysis/introduction-to-chart-patterns",
+      "purpose": "Checked contextual interpretation of channels."
+    },
+    {
+      "title": "StockCharts: Bump and Run Reversal",
+      "url": "https://chartschool.stockcharts.com/table-of-contents/chart-analysis/chart-patterns/bump-and-run-reversal",
+      "purpose": "Checked three phases and chart-scale caveat."
+    }
+  ]
+}

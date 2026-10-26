@@ -12,6 +12,26 @@ The Fastify service provides PostgreSQL-backed authentication and practice APIs.
 
 The API listens on `http://127.0.0.1:4000` by default. `WEB_ORIGIN` must exactly match the web app origin for API CORS.
 
+## Shared learning notes
+
+Migrations `019_learning_notes.sql` and `020_seed_learning_notes.sql` create the shared Notes library with 53 patterns, their diagrams, and 7 foundation lessons. Apply migrations before deploying the updated API. Existing `user_notes` remain untouched and are never returned by the shared Notes API.
+
+All signed-in users can read `/v1/notes`. Only accounts in `notes_admins` can create, edit or delete shared notes. The API checks membership on every write; browser-supplied role flags are ignored. No account is an admin by default. Both new tables deny direct Supabase browser access through RLS and revoked grants.
+
+Migration `021_assign_notes_admin.sql` assigns the owner-designated existing account `QVT4QQDG` as a Notes admin. It fails if that active account cannot be found, and does not grant access to any other account. Like other migrations, it runs once; later revocation is preserved by `schema_migrations`.
+
+After confirming the administrator's XOCRISK UID, a database administrator can grant access using a parameterized query (`$1` is that UID):
+
+```sql
+INSERT INTO notes_admins (user_id)
+SELECT id FROM users WHERE uid = $1 AND deletion_requested_at IS NULL
+ON CONFLICT DO NOTHING RETURNING user_id;
+```
+
+Verify the intended account before granting access. Remove its row from `notes_admins` to revoke editing immediately. The Notes screen exposes New, Edit, Save for everyone and Delete only to admins. Updates and deletes require the current note version so concurrent admin edits are not silently overwritten. Admins edit the title and teaching text; the seeded diagrams remain attached to their patterns.
+
+The initial seed can be reproduced with `node scripts/generate-learning-notes-seed.mjs` from the repository root. Subsequent editorial changes belong in the admin editor; rerunning the seed does not overwrite existing notes.
+
 ## Practice trading
 
 Migration `004_practice_trading.sql` adds persistent user portfolios, holdings, orders, performance snapshots, and a leaderboard preference. The authenticated `/v1/practice` routes back the dashboard, order entry, open-order cancellation, portfolio reset, and college leaderboard.

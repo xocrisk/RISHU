@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useAuthApi } from "../../lib/auth-session";
 import { answer, suggestions, type AiContext } from "./ai-brain";
-import { istDateTime, istDayFullYear, istOrderTime, istTime, money, percent, tone } from "./format";
+import { istDateTime, istDayFullYear, istTime, money, percent, tone } from "./format";
 import type { Dashboard, Quote } from "./types";
 import { Empty } from "./views";
 
@@ -314,120 +314,6 @@ export function CommunityView({ data, notify }: { data: Dashboard; notify: Notif
         </form>
       </section>
       <p className="xq-muted small">Be respectful. Don&apos;t share phone numbers, passwords or other personal details, and don&apos;t treat anyone&apos;s message as financial advice.</p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ Notes */
-
-type Note = { id: string; title: string; body: string; createdAt: string; updatedAt: string };
-
-export function NotesView({ notify }: { notify: Notify }) {
-  const authFetch = useAuthApi();
-  const [notes, setNotes] = useState<Note[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
-  const timers = useRef(new Map<string, number>());
-
-  useEffect(() => {
-    authFetch("/v1/notes")
-      .then((response) => (response.ok ? response.json() as Promise<{ notes: Note[] }> : Promise.reject()))
-      .then((body) => { setNotes(body.notes); setSelectedId(body.notes[0]?.id ?? null); })
-      .catch(() => { setNotes([]); notify("error", "Couldn't load your notes."); });
-  }, [authFetch, notify]);
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach((timer) => window.clearTimeout(timer));
-  }, []);
-
-  const selected = notes?.find((note) => note.id === selectedId) ?? null;
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (notes ?? []).filter((note) => !q || note.title.toLowerCase().includes(q) || note.body.toLowerCase().includes(q));
-  }, [notes, query]);
-
-  async function create() {
-    const response = await authFetch("/v1/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "", body: "" }) });
-    const body = await response.json().catch(() => ({})) as { note?: Note; message?: string };
-    if (!response.ok || !body.note) { notify("error", body.message ?? "Couldn't create a note."); return; }
-    setNotes((current) => [body.note!, ...(current ?? [])]);
-    setSelectedId(body.note.id);
-    window.setTimeout(() => document.getElementById("note-title")?.focus(), 0);
-  }
-
-  function change(field: "title" | "body", value: string) {
-    if (!selected) return;
-    const id = selected.id;
-    setNotes((current) => (current ?? []).map((note) => (note.id === id ? { ...note, [field]: value, updatedAt: new Date().toISOString() } : note)));
-    setSaveState("saving");
-    // Autosave shortly after the user stops typing.
-    window.clearTimeout(timers.current.get(id));
-    timers.current.set(id, window.setTimeout(() => {
-      const latest = { ...selected, [field]: value };
-      authFetch(`/v1/notes/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: latest.title, body: latest.body }) })
-        .then((response) => setSaveState(response.ok ? "saved" : "error"))
-        .catch(() => setSaveState("error"));
-    }, 700));
-  }
-
-  async function remove() {
-    if (!selected || !window.confirm(`Delete "${selected.title || "Untitled note"}"? This can't be undone.`)) return;
-    const id = selected.id;
-    window.clearTimeout(timers.current.get(id));
-    const response = await authFetch(`/v1/notes/${id}`, { method: "DELETE" });
-    if (!response.ok) { notify("error", "Couldn't delete the note."); return; }
-    const rest = (notes ?? []).filter((note) => note.id !== id);
-    setNotes(rest);
-    setSelectedId(rest[0]?.id ?? null);
-    notify("ok", "Note deleted.");
-  }
-
-  return (
-    <div className="xq-page">
-      <div className="xq-page-head"><h1>Notes</h1><span className="xq-muted">Private to you · saved automatically</span></div>
-      <section className="xq-panel flush xq-notes">
-        <aside className="xq-notes-list">
-          <div className="xq-notes-tools">
-            <input aria-label="Search notes" onChange={(event) => setQuery(event.target.value)} placeholder="Search notes" value={query} />
-            <button className="xq-btn primary" onClick={() => void create()} type="button">+ New</button>
-          </div>
-          {notes === null ? <div className="xq-loading-block"><span className="xq-spinner" /></div> : (
-            <ul>
-              {visible.map((note) => (
-                <li key={note.id}>
-                  <button aria-current={note.id === selectedId ? "true" : undefined} onClick={() => setSelectedId(note.id)} type="button">
-                    <b>{note.title || "Untitled note"}</b>
-                    <small>{note.body.slice(0, 80) || "No text yet"}</small>
-                    <time>{istOrderTime.format(new Date(note.updatedAt))}</time>
-                  </button>
-                </li>
-              ))}
-              {!visible.length && <li className="xq-muted xq-notes-empty">{notes.length ? "No notes match." : "No notes yet."}</li>}
-            </ul>
-          )}
-        </aside>
-        <div className="xq-notes-editor">
-          {selected ? (
-            <>
-              <div className="xq-notes-bar">
-                <span className={saveState === "error" ? "down" : "xq-muted"}>{saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved, retry by typing" : "Saved"}</span>
-                <button className="xq-btn danger" onClick={() => void remove()} type="button">Delete</button>
-              </div>
-              <input aria-label="Note title" className="xq-note-title" id="note-title" maxLength={120} onChange={(event) => change("title", event.target.value)}
-                placeholder="Title, e.g. Why I bought TCS" value={selected.title} />
-              <textarea aria-label="Note text" className="xq-note-body" maxLength={10000} onChange={(event) => change("body", event.target.value)}
-                placeholder={"Entry reason, target, stop-loss, what you learned…"} value={selected.body} />
-            </>
-          ) : (
-            <Empty title="Write your first note">
-              <p>Keep a trading journal: why you bought, when you&apos;d exit, and what you learned.</p>
-              <button className="xq-btn primary" onClick={() => void create()} type="button">New note</button>
-            </Empty>
-          )}
-        </div>
-      </section>
     </div>
   );
 }

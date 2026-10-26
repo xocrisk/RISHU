@@ -87,15 +87,15 @@ const mistakes = (context: AiContext): string[] => {
 };
 
 const tradeReview = (context: AiContext) => {
-  if (!filledOrders(context).length) return "You haven't completed any trades yet, so there's nothing to review. Place a few practice trades with a written plan (entry, target, stop-loss) in Notes, then ask me again.";
+  if (!filledOrders(context).length) return "You haven't completed any trades yet, so there's nothing to review. Place a few practice trades with a written plan (entry, target, stop-loss) in your own trading journal, then ask me again.";
   const found = mistakes(context);
-  if (!found.length) return "I don't see any obvious mistakes: no rejected orders, no big losers left running, and no single stock dominating. Keep writing down why you enter and exit each trade in Notes.";
+  if (!found.length) return "I don't see any obvious mistakes: no rejected orders, no big losers left running, and no single stock dominating. Keep writing down why you enter and exit each trade in your own trading journal.";
   return `Here's what I noticed:\n• ${found.join("\n• ")}`;
 };
 
 const strategyReview = (context: AiContext) => {
   const filled = filledOrders(context);
-  if (!filled.length) return "You haven't completed any trades yet. Write your strategy in Notes (what you buy, why, your target and stop-loss), trade it here for a few weeks, then ask me to review it.";
+  if (!filled.length) return "You haven't completed any trades yet. Write your strategy in your own trading journal (what you buy, why, your target and stop-loss), trade it here for a few weeks, then ask me to review it.";
   const buys = filled.filter((order) => order.side === "buy").length;
   const intraday = filled.filter((order) => order.product === "intraday").length;
   const limit = filled.filter((order) => order.orderType === "limit").length;
@@ -164,7 +164,7 @@ const paperTradingIntents: Intent[] = [
   { patterns: [/(market|bazaar|bazar).*(band|closed|close|off).*(order|lagau|lagaun|trade|buy|sell|kya hoga)|(order|trade|buy|sell).*(market|bazaar|bazar).*(band|closed)|after (market )?hours|weekend.*(order|trade)/],
     answer: (context) => `If the market is closed: market orders are rejected, because there's no live price to fill them at. Limit orders are accepted and stay Open; they're checked when the market reopens and fill once the price reaches your limit. ${marketLine(context)}` },
   { patterns: [/(market|limit|stop).*order.*(kaise|kese|how|kaam|work|kya|difference|farak|fark)|order types?|types of orders?|stop ?-?loss order/],
-    answer: "Order types:\n• Market order: fills straight away at the current price (only while NSE is open, 9:15 AM – 3:30 PM IST)\n• Limit order: you set a price; a buy fills at or below it, a sell at or above it. It waits as Open until then\n• Stop-loss order: an automatic exit when the price falls to a level you set. XOCRISK doesn't have a stop-loss order type yet, so decide your stop-loss price, write it in Notes and sell manually if it's hit." },
+    answer: "Order types:\n• Market order: fills straight away at the current price (only while NSE is open, 9:15 AM – 3:30 PM IST)\n• Limit order: you set a price; a buy fills at or below it, a sell at or above it. It waits as Open until then\n• Stop-loss order: an automatic exit when the price falls to a level you set. XOCRISK doesn't have a stop-loss order type yet, so decide your stop-loss price, write it in your own trading journal and sell manually if it's hit." },
   { patterns: [/(execute|executed|fill|filled|complete|pura).*(nahi|nhi|not|na hua|kyun)|(not|nahi|nhi|kyun nahi) (execute|fill|hua)|order (pending|open|stuck|atak|atka)|why.*(not|isn'?t|wasn'?t).*(fill|execut)/],
     answer: "Why an order may not have executed:\n• It's a limit order and the price hasn't reached your limit yet (it stays Open)\n• The market is closed; limit orders are only checked while NSE is open\n• It was rejected: market order outside market hours, not enough cash, selling more shares than you hold, or a limit price more than 20% from the last price\nTransactions shows each order's status and the exact rejection reason." },
   { patterns: [/square ?-?off/],
@@ -200,7 +200,7 @@ const paperTradingIntents: Intent[] = [
   { patterns: [/watch ?list/],
     answer: "Watchlist: open Trade or Watchlist, search for a stock and tap its star (☆) to add it. Starred stocks appear in your list with live-updating prices. Tap the star again to remove it; Settings has an option to clear them all." },
   { patterns: [/alert|notify|notification|reminder/],
-    answer: "Price alerts aren't available on XOCRISK yet. Workarounds: place a limit order at your target price (it fills automatically when reached), or star the stock in your Watchlist and note your target in Notes." },
+    answer: "Price alerts aren't available on XOCRISK yet. Workarounds: place a limit order at your target price (it fills automatically when reached), or star the stock in your Watchlist and note your target in your own trading journal." },
 
   // ---- learning & guidance
   { patterns: [/position ?siz|kitne (shares|share|qty|quantity) (lu|lun|loon|kharidu|kharidun|lena)|how many shares (should|to)/],
@@ -214,9 +214,9 @@ const paperTradingIntents: Intent[] = [
     answer: "Common indicators:\n• RSI (0–100) measures momentum: above 70 is often called overbought, below 30 oversold. It can stay extreme in strong trends\n• MACD compares a 12- and 26-day moving average; the MACD line crossing above its signal line suggests rising momentum, below suggests falling\n• Moving averages (e.g. 50-day, 200-day) smooth out price; price above a rising MA suggests an uptrend\nNo indicator works alone or every time: combine them with price action, and always use a stop-loss. XOCRISK's chart shows price history you can use to spot trends." },
   { patterns: [/(review|check|dekho).*(strategy|strategies)|(my|meri|mera) (trading )?strateg/], answer: strategyReview },
   { patterns: [/strateg/],
-    answer: "Beginner-friendly approaches (for learning, not guaranteed to profit):\n• Buy and hold quality large-caps (NIFTY 50) for months, not days\n• Trend following: buy stocks above a rising 50-day moving average, exit below it\n• Simple SIP-style investing: buy a fixed amount regularly\nWhichever you pick: write the rules in Notes, use a stop-loss, risk 1–2% per trade, and test it over 20+ trades here before using real money. Avoid intraday and F&O until you're consistent." },
+    answer: "Beginner-friendly approaches (for learning, not guaranteed to profit):\n• Buy and hold quality large-caps (NIFTY 50) for months, not days\n• Trend following: buy stocks above a rising 50-day moving average, exit below it\n• Simple SIP-style investing: buy a fixed amount regularly\nWhichever you pick: write the rules in your own trading journal, use a stop-loss, risk 1–2% per trade, and test it over 20+ trades here before using real money. Avoid intraday and F&O until you're consistent." },
   { patterns: [/beginner|naya hu|new to (trading|stock|market)|kaha se shuru|where (do i|to) start|seekhna|learn trading/],
-    answer: "Starting out:\n1. Learn the basics: shares, market vs limit orders, P&L (ask me about any)\n2. Buy 2–3 large NIFTY 50 companies you understand, in small quantities\n3. Write why you bought and your exit plan in Notes\n4. Review weekly: ask me \"meri galtiyan\" or \"review my strategy\"\n5. Join the LPU championship once you're comfortable\nIt's all virtual money, so experiment freely." },
+    answer: "Starting out:\n1. Learn the basics: shares, market vs limit orders, P&L (ask me about any)\n2. Buy 2–3 large NIFTY 50 companies you understand, in small quantities\n3. Write why you bought and your exit plan in your own trading journal\n4. Review weekly: ask me \"meri galtiyan\" or \"review my strategy\"\n5. Join the LPU championship once you're comfortable\nIt's all virtual money, so experiment freely." },
 
   // ---- gamification & community
   { patterns: [/\brank\b|leaderboard/],
@@ -328,9 +328,9 @@ const intents: Intent[] = [
     answer: "The LPU Trading Championship is conducted by Lovely Professional University. Open Championship (Contest on the phone) and press \"Pay ₹99 & join\": the one-time entry fee is paid securely through Razorpay (UPI, cards, net banking). Trading itself uses practice money. Your return is measured from your account value when you join, and the highest return when it ends wins." },
   { patterns: [/community|chat|talk to (other|people)|connect/],
     answer: "Community is a chat room for all XOCRISK traders. Only your name and UID are shown. Be respectful and don't share personal details." },
-  { patterns: [/note/], answer: "Notes is your private notebook. Write down why you bought a stock and when you'd exit. Notes save automatically and only you can see them." },
+  { patterns: [/note/], answer: "Notes is the shared learning library with candlestick patterns, chart patterns and foundation lessons. Everyone can read and search it; only admins can add, edit or delete learning notes." },
   { patterns: [/what is xocrisk|about (the )?app|what can (i|you) do/],
-    answer: "XOCRISK is a paper-trading app: you trade real NSE stocks at delayed prices with ₹1,00,000 of practice money. Learn, join the LPU championship, chat with the community and keep notes, with no real money at risk." },
+    answer: "XOCRISK is a paper-trading app: you trade real NSE stocks at delayed prices with ₹1,00,000 of practice money. Learn, join the LPU championship, chat with the community and read learning notes, with no real money at risk." },
   { patterns: [/real money|is (this|it) real|withdraw|deposit/], answer: "No real money is involved. Your ₹1,00,000 is practice money and can't be deposited or withdrawn." },
   { patterns: [/delay|live price|real[ -]?time/], answer: "Prices are delayed NSE quotes, refreshed about every 10 minutes during market hours and once after the close." },
 

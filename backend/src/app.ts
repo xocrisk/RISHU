@@ -10,6 +10,7 @@ import { registerPracticeRoutes } from "./practice.js";
 import { MarketFeed } from "./market/feed.js";
 import { registerMarketRoutes } from "./market/routes.js";
 import { registerCommunityRoutes } from "./community.js";
+import { registerNotesRoutes } from "./notes.js";
 
 // Whether this server can reach Supabase Auth with its secret key: "ok", an HTTP status, or the error name.
 async function probeSupabase(supabase: { url: string; secretKey: string }): Promise<string> {
@@ -114,5 +115,6 @@ export async function buildApp(dependencies: AppDependencies) {
   await registerPracticeRoutes(app, dependencies.pool, market);
   await registerMarketRoutes(app);
   await registerCommunityRoutes(app, dependencies.pool, market, dependencies.config.razorpay);
+  await registerNotesRoutes(app, dependencies.pool);
   return app;
 }
