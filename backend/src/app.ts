@@ -9,6 +9,7 @@ import { registerOAuthRoutes } from "./oauth.js";
 import { registerPracticeRoutes } from "./practice.js";
 import { MarketFeed } from "./market/feed.js";
 import { registerMarketRoutes } from "./market/routes.js";
+import { registerScannerRoutes } from "./market/scanner-routes.js";
 import { registerCommunityRoutes } from "./community.js";
 import { registerNotesRoutes } from "./notes.js";
 
@@ -114,6 +115,7 @@ export async function buildApp(dependencies: AppDependencies) {
   const market = dependencies.market ?? new MarketFeed(dependencies.pool);
   await registerPracticeRoutes(app, dependencies.pool, market);
   await registerMarketRoutes(app);
+  await registerScannerRoutes(app);
   await registerCommunityRoutes(app, dependencies.pool, market, dependencies.config.razorpay);
   await registerNotesRoutes(app, dependencies.pool);
   return app;

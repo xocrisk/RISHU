@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useAuthApi } from "../../lib/auth-session";
-import { answer, suggestions, type AiContext } from "./ai-brain";
+import { suggestions, type AiContext } from "./ai-brain";
+import { answerWithMarket } from "./market-analysis";
 import { istDateTime, istDayFullYear, istTime, money, percent, tone } from "./format";
 import type { Dashboard, Quote } from "./types";
 import { Empty } from "./views";
@@ -324,10 +325,13 @@ type ChatLine = { from: "user" | "ai"; text: string; at: number };
 const aiKey = "xocrisk.ai.v1";
 
 export function AiView({ data, quotes, indices }: { data: Dashboard; quotes: Map<string, Quote>; indices: Map<string, Quote> }) {
+  const authFetch = useAuthApi();
+  const pending = useRef<AbortController | null>(null);
   const [lines, setLines] = useState<ChatLine[]>(() => {
     try {
       const saved = typeof window === "undefined" ? null : localStorage.getItem(aiKey);
-      return saved ? JSON.parse(saved) as ChatLine[] : [];
+      const parsed: unknown = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed.filter((line): line is ChatLine => line && (line.from === "user" || line.from === "ai") && typeof line.text === "string" && Number.isFinite(line.at)).slice(-60) : [];
     } catch {
       return [];
     }
@@ -337,29 +341,36 @@ export function AiView({ data, quotes, indices }: { data: Dashboard; quotes: Map
   const listRef = useRef<HTMLDivElement>(null);
   const context: AiContext = useMemo(() => ({ data, quotes, indices }), [data, quotes, indices]);
 
+  useEffect(() => () => { pending.current?.abort(); }, []);
+
   useEffect(() => {
     try { localStorage.setItem(aiKey, JSON.stringify(lines.slice(-60))); } catch { /* storage blocked */ }
     const element = listRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [lines, typing]);
 
-  function ask(question: string) {
+  async function ask(question: string) {
     const text = question.trim();
-    if (!text || typing) return;
+    if (!text || pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
     setLines((current) => [...current, { from: "user", text, at: Date.now() }]);
     setDraft("");
     setTyping(true);
-    window.setTimeout(() => {
-      setLines((current) => [...current, { from: "ai", text: answer(text, context), at: Date.now() }]);
-      setTyping(false);
-    }, 450);
+    try {
+      const response = await answerWithMarket(text, context, lines, authFetch, controller.signal);
+      if (!controller.signal.aborted) setLines((current) => [...current, { from: "ai", text: response, at: Date.now() }]);
+    } finally {
+      if (pending.current === controller) pending.current = null;
+      if (!controller.signal.aborted) setTyping(false);
+    }
   }
 
   return (
     <div className="xq-page narrow">
       <div className="xq-page-head">
         <h1>XOCRISK AI</h1>
-        {lines.length > 0 && <button className="xq-btn ghost" onClick={() => setLines([])} type="button">Clear chat</button>}
+        {lines.length > 0 && <button className="xq-btn ghost" disabled={typing} onClick={() => setLines([])} type="button">Clear chat</button>}
       </div>
       <section className="xq-panel flush xq-ai">
         <div className="xq-ai-list" ref={listRef}>
@@ -367,7 +378,7 @@ export function AiView({ data, quotes, indices }: { data: Dashboard; quotes: Map
             <div className="xq-ai-welcome">
               <span className="xq-ai-orb" aria-hidden="true">✦</span>
               <h2>Hi {data.user.fullName?.split(" ")[0] ?? "there"}, I&apos;m XOCRISK AI</h2>
-              <p>Ask me about the market, trading basics, your account or any NIFTY 500 stock&apos;s price.</p>
+              <p>Scan NSE stocks, analyze a company&apos;s chart, or learn trading step by step. Try “market scan karo” or “Reliance analyze karo” for analysis from delayed market data.</p>
             </div>
           )}
           {lines.map((line, index) => (
@@ -376,19 +387,19 @@ export function AiView({ data, quotes, indices }: { data: Dashboard; quotes: Map
               <p>{line.text}</p>
             </div>
           ))}
-          {typing && <div className="xq-ai-line ai"><span className="xq-ai-orb small" aria-hidden="true">✦</span><p className="xq-typing"><i /><i /><i /></p></div>}
+          {typing && <div className="xq-ai-line ai" role="status"><span className="xq-ai-orb small" aria-hidden="true">✦</span><p>Preparing your answer… Market scans can take up to 30 seconds.</p></div>}
         </div>
         <div className="xq-ai-suggest">
-          {suggestions.map((suggestion) => <button key={suggestion} onClick={() => ask(suggestion)} type="button">{suggestion}</button>)}
+          {suggestions.map((suggestion) => <button disabled={typing} key={suggestion} onClick={() => void ask(suggestion)} type="button">{suggestion}</button>)}
         </div>
-        <form className="xq-chat-input" onSubmit={(event) => { event.preventDefault(); ask(draft); }}>
+        <form className="xq-chat-input" onSubmit={(event) => { event.preventDefault(); void ask(draft); }}>
           <textarea aria-label="Ask XOCRISK AI" maxLength={300} onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); ask(draft); } }}
-            placeholder="Ask anything… e.g. price of TCS" rows={1} value={draft} />
+            onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(draft); } }}
+            placeholder="Try: market scan karo, TCS analyze karo, or RSI kya hai?" rows={1} value={draft} />
           <div><button className="xq-btn primary" disabled={!draft.trim() || typing} type="submit">Ask</button></div>
         </form>
       </section>
-      <p className="xq-muted small">XOCRISK AI gives pre-written answers for learning. It isn&apos;t a financial advisor.</p>
+      <p className="xq-muted small">Chart analysis uses delayed, unofficial Yahoo Finance data. Coverage and timestamps appear in each scan. Rule matches are educational, not predictions or buy/sell advice.</p>
     </div>
   );
 }

@@ -1,0 +1,177 @@
+/** Curated educational material, not model weights or executable trading signals. */
+export type Lesson = {
+  id: string; title: string; aliases: string[]; explanation: string; example: string;
+  practice: string; question: string; choices: [string, string, string]; correct: number;
+};
+
+export const lessons: Lesson[] = [
+  {
+    id: "basics", title: "Trading foundations", aliases: ["stock market", "trading basics", "share market", "equity", "trading foundation"],
+    explanation: "A share represents ownership in a business. Exchanges match buyers and sellers; brokers route orders. Trading focuses on price changes over a chosen horizon, while investing focuses on longer-term ownership and business value. Both can lose money. A low share price does not automatically mean a cheap business.",
+    example: "10 shares bought at ₹100 cost ₹1,000. Selling at ₹110 produces ₹100 gross profit; costs reduce the net result.",
+    practice: "Write down your time horizon, learning goal and the amount you could afford to lose before choosing a strategy.",
+    question: "Does a ₹10 share necessarily offer better value than a ₹1,000 share?", choices: ["Yes", "No; valuation needs business and share-count context", "Only if its price rose today"], correct: 1,
+  },
+  {
+    id: "orders", title: "Orders and execution", aliases: ["market order", "limit order", "order types", "order execution"],
+    explanation: "Market orders prioritize execution; the displayed price is not assured. Limit orders specify a price boundary but may never fill. A triggered stop-market order can slip; a stop-limit can remain unfilled. XOCRISK supports market and limit equity orders; a planned stop is not an automatic stop order here.",
+    example: "A buy limit at ₹100 permits fills at ₹100 or less. A price touch alone does not assure a real-world fill when other orders are ahead.",
+    practice: "Compare a virtual market order with a limit order and record why the limit remained open or filled.",
+    question: "What does a buy limit order control?", choices: ["Guaranteed execution time", "Guaranteed profit", "Maximum purchase price"], correct: 2,
+  },
+  {
+    id: "liquidity", title: "Liquidity, spread and slippage", aliases: ["liquidity", "bid ask", "spread", "slippage", "market depth"],
+    explanation: "The bid is a buyer's quote and the ask is a seller's quote. Their gap is the spread. Thin depth can make a large order move through several prices. Slippage is the difference between your expected and actual fill; volume alone does not assure liquidity at your price.",
+    example: "At bid ₹99 and ask ₹101, buying then immediately selling one share loses about ₹2 before fees if those quotes remain available.",
+    practice: "In a journal, model wider spreads and worse fills during news. XOCRISK's simplified fills do not reproduce an exchange order book.",
+    question: "What can thin order-book depth cause?", choices: ["A worse fill for a large order", "Guaranteed fills", "Zero spread"], correct: 0,
+  },
+  {
+    id: "candles", title: "Candlesticks and OHLC", aliases: ["candlestick", "candle", "ohlc", "doji", "hammer", "engulfing", "shooting star"],
+    explanation: "A candle shows open, high, low and close for one interval. The body connects open and close; wicks reach high and low. Doji means a small body, while a hammer has a small body near the top and a long lower wick. An engulfing body covers the previous body. Context matters more than a pattern name; no candle guarantees reversal.",
+    example: "Open 100, high 106, low 98, close 104 gives a body from 100 to 104, with wicks to 98 and 106.",
+    practice: "Label ten completed candles, their preceding trend and nearby price levels. Compare successes and failures; Notes contains more patterns.",
+    question: "When is a candle's final shape known?", choices: ["At its open", "After its interval closes", "When it first turns green"], correct: 1,
+  },
+  {
+    id: "structure", title: "Trend and market structure", aliases: ["price action", "market structure", "uptrend", "downtrend", "trendline", "higher high", "timeframe"],
+    explanation: "Higher swing highs and lows describe an uptrend; lower highs and lows describe a downtrend. A range has overlapping swings. Structure depends on timeframe: an intraday rally can sit inside a daily decline. Use a consistent definition of a swing and avoid choosing it after seeing the outcome.",
+    example: "Swing lows 100, 105, 110 and highs 108, 115, 120 describe rising structure on that chart.",
+    practice: "Mark swings on daily and hourly charts. Write an invalidation condition before looking at the next candle.",
+    question: "Can two timeframes show different trends?", choices: ["Yes", "Never", "Only for indices"], correct: 0,
+  },
+  {
+    id: "levels", title: "Support, resistance and breakouts", aliases: ["support", "resistance", "breakout", "breakdown", "retest", "false break"],
+    explanation: "Support and resistance are areas where price previously reacted, not walls. A breakout moves beyond a chosen boundary; a failed breakout returns inside it. Define whether your rule needs a candle close, a retest or volume confirmation. Confirmation can still fail.",
+    example: "A range is ₹100–110. A close at ₹111 meets a close-above rule, but a later return to ₹108 can invalidate the setup.",
+    practice: "Document ten breakouts and ten failures using the same rule, including a planned exit and transaction costs.",
+    question: "Does a retest guarantee a successful breakout?", choices: ["Always", "Only with volume", "No"], correct: 2,
+  },
+  {
+    id: "patterns", title: "Chart patterns", aliases: ["chart pattern", "double top", "double bottom", "head and shoulders", "triangle", "flag pattern", "wedge"],
+    explanation: "Double tops/bottoms, head-and-shoulders, triangles and flags summarize price structure. State the boundary and confirmation rule before entry. Pattern targets are hypotheses; failed patterns and gaps can create losses. Two similar-looking shapes can behave differently across regimes.",
+    example: "For a hypothetical double top, a trader might wait for a close below the intervening low. Merely seeing two peaks is not that confirmation.",
+    practice: "Use Notes to compare patterns. Save examples that failed as well as ones that worked.",
+    question: "How should a pattern target be treated?", choices: ["As a guaranteed exit price", "As a hypothesis to test", "As a promise from the exchange"], correct: 1,
+  },
+  {
+    id: "averages", title: "Moving averages and MACD", aliases: ["moving average", "sma", "ema", "macd", "crossover"],
+    explanation: "An SMA averages recent closes; an EMA weights recent observations more. MACD commonly subtracts a 26-period EMA from a 12-period EMA and uses a 9-period EMA signal line. These are periods on the selected chart, not necessarily days. Smoothing introduces lag, and crossings can whipsaw in ranges.",
+    example: "Closes 100, 102 and 104 have a 3-period SMA of 102. That describes past prices, not the next close.",
+    practice: "Compare the same crossover rule in a trend and a sideways interval, counting every failed signal.",
+    question: "On a 5-minute chart, what does 12-period EMA use?", choices: ["12 years", "12 daily closes", "5-minute bars"], correct: 2,
+  },
+  {
+    id: "rsi", title: "RSI and momentum", aliases: ["rsi", "relative strength index", "overbought", "oversold", "divergence"],
+    explanation: "RSI compares smoothed gains and losses on a 0–100 scale, commonly over 14 periods. Readings around 70/30 are conventional overbought/oversold zones, not automatic sell/buy instructions. Divergence is a disagreement between price and indicator swings, not proof of a reversal.",
+    example: "RSI can remain above 70 while a strong uptrend continues; shorting solely because it is high can lose money.",
+    practice: "Record RSI extremes in trending and ranging periods separately and compare what happened next.",
+    question: "Does RSI below 30 guarantee a rebound?", choices: ["No", "Yes", "Only on a daily chart"], correct: 0,
+  },
+  {
+    id: "volatility", title: "ATR and Bollinger Bands", aliases: ["atr", "average true range", "bollinger", "volatility"],
+    explanation: "True range includes the high-low range and gaps from the previous close; ATR smooths true range. It measures movement, not direction. Bollinger Bands usually place standard-deviation bands around an average. A band touch is not automatically a reversal, and a squeeze does not tell you breakout direction.",
+    example: "With prior close 100, high 108 and low 105, true range is max(3, 8, 5) = 8.",
+    practice: "Compare stop distances with typical movement. If a wider stop is appropriate to your tested rule, reduce quantity to keep planned risk unchanged.",
+    question: "Does ATR tell you whether price will rise?", choices: ["Yes", "No; it measures movement", "Only when ATR rises"], correct: 1,
+  },
+  {
+    id: "volume", title: "Volume and VWAP", aliases: ["volume", "vwap", "volume weighted"],
+    explanation: "Volume counts traded units, not net buying: every completed trade has both sides. VWAP weights prices by volume and is often reset each session. It is a benchmark, not a guaranteed support level. Specify whether you use individual trades or a bar-price approximation.",
+    example: "100 shares at ₹10 and 300 at ₹12 give VWAP (1,000 + 3,600) / 400 = ₹11.50.",
+    practice: "Compare a move's volume with similar times of day, rather than comparing the open with a quiet midday bar.",
+    question: "Which trade influences VWAP more?", choices: ["The one with the longer name", "All trades equally", "The one with more volume"], correct: 2,
+  },
+  {
+    id: "risk", title: "Risk management and stop-loss", aliases: ["risk management", "stop loss", "risk control", "risk manage", "risk kam"],
+    explanation: "Define invalidation, loss budget, quantity and exit rules before entry. Treat any percentage risk limit as a chosen training assumption, not a universal safe level. Stops can slip or fail to execute. Also cap combined exposure and decide when to stop trading after losses. XOCRISK does not automatically execute a planned stop-loss.",
+    example: "A hypothetical ₹500 loss budget and ₹10 entry-to-stop distance allow 50 shares before cash constraints, fees and gap risk.",
+    practice: "Write a maximum planned loss per trade and per day. Record rule violations separately from losing trades.",
+    question: "Can a gap make a stop-based loss estimate too small?", choices: ["Yes", "No", "Only if the position is profitable"], correct: 0,
+  },
+  {
+    id: "sizing", title: "Position sizing", aliases: ["position sizing", "position size", "kitne shares", "how many shares", "quantity calculation"],
+    explanation: "For a long cash-equity example, planned risk per share = entry − stop. Quantity = floor(loss budget / per-share risk), further limited by available cash and exposure limits. A stop must be below entry. Fees and gaps can make actual losses larger. A larger position is not justified just because a setup feels certain.",
+    example: "₹1,000 budget, entry ₹500 and stop ₹480 allow 50 shares by risk. With only ₹10,000 cash, the cash cap reduces it to 20.",
+    practice: "Ask: position size capital 100000 cash 10000 risk 1% entry 500 stop 480 target 540. Supply your chosen risk percentage; this is a virtual long-only calculation.",
+    question: "Which quantity is usable when risk allows 50 but cash allows 20?", choices: ["50", "20", "70"], correct: 1,
+  },
+  {
+    id: "expectancy", title: "Risk/reward and expectancy", aliases: ["risk reward", "risk/reward", "expectancy", "r multiple", "profit factor", "breakeven", "break even"],
+    explanation: "R is the planned initial risk. Expected result = win probability × average win − loss probability × average loss, using consistent units and accounting for costs. Reward/risk alone is insufficient. Profit factor divides gross winning P&L by absolute gross losing P&L; it is undefined with zero gross loss.",
+    example: "40% wins at 2R and 60% losses at 1R give 0.4 × 2 − 0.6 × 1 = +0.2R before costs. This assumed win rate needs evidence.",
+    practice: "Compute outcomes from closed trades and include fees, spreads and failed fills. Do not infer a reliable edge from a tiny sample.",
+    question: "Can a high win rate still lose money?", choices: ["Never", "Only in options", "Yes, if losses outweigh wins"], correct: 2,
+  },
+  {
+    id: "portfolio", title: "Diversification and drawdown", aliases: ["diversification", "correlation", "drawdown", "portfolio risk", "concentration"],
+    explanation: "Several positions can share the same underlying risk, so stock count alone does not measure diversification. Drawdown is a fall from an equity peak; maximum drawdown is the largest peak-to-trough fall in the observed period. Historical drawdown is not a future loss ceiling.",
+    example: "An account falling from ₹100,000 to ₹80,000 has a 20% drawdown and needs a 25% gain to recover to ₹100,000.",
+    practice: "Group holdings by sector and common exposures, then review aggregate planned risk and cash needs.",
+    question: "Does owning five banks eliminate sector concentration?", choices: ["No", "Yes", "Only if each has a different price"], correct: 0,
+  },
+  {
+    id: "fundamentals", title: "Fundamental analysis", aliases: ["fundamental", "valuation", "p/e", "pe ratio", "eps", "roe", "balance sheet", "cash flow", "debt equity"],
+    explanation: "Read revenue, margins, earnings, operating cash flow, debt and dilution together. P/E divides price by earnings per share; it is often uninformative with losses or unusual earnings. Compare peers and business cycles, and inspect accounting notes. Growth does not justify any price.",
+    example: "A ₹200 share with annual EPS ₹10 has P/E 20. That ratio alone cannot determine whether the business is attractive.",
+    practice: "Read a company's published annual report and list three business risks plus differences between profit and cash flow.",
+    question: "Is a low P/E alone proof of a good investment?", choices: ["Yes", "No", "Only below 10"], correct: 1,
+  },
+  {
+    id: "events", title: "News, earnings and corporate actions", aliases: ["earnings", "news trading", "corporate action", "stock split", "bonus share", "dividend", "macro", "interest rate"],
+    explanation: "Prices react to surprises relative to expectations, not just whether news sounds good. Earnings, rates and corporate actions can create gaps. Splits change share count and per-share price mechanically; dividends are not free extra wealth. Verify dates and announcements with the issuer or exchange.",
+    example: "A 2-for-1 split turns 10 shares into 20 and mechanically halves the reference per-share price; that action alone does not double your wealth.",
+    practice: "Check official announcements before a hypothetical trade and mark event exposure in the journal.",
+    question: "Does a stock split alone double portfolio value?", choices: ["Yes", "Only on the first day", "No"], correct: 2,
+  },
+  {
+    id: "strategy", title: "Building a testable strategy", aliases: ["strategy", "strategies", "trade plan", "trading plan", "swing trading", "scalping", "trend following", "mean reversion"],
+    explanation: "Specify universe, timeframe, market regime, setup, entry, invalidation, sizing and exit rules. Trend following and mean reversion make different assumptions. Intraday, swing and longer holding periods have different cost and gap exposure. A discretionary idea must become repeatable rules before you can evaluate it.",
+    example: "A research hypothesis could enter after a close above a prior range, exit on a defined invalidation and skip earnings events. It remains unproven until tested.",
+    practice: "Write a one-page plan, including no-trade conditions. Freeze the rules for an evaluation period instead of changing them after each loss.",
+    question: "What makes a strategy testable?", choices: ["Explicit repeatable rules", "A catchy name", "One winning screenshot"], correct: 0,
+  },
+  {
+    id: "backtest", title: "Backtesting and forward testing", aliases: ["backtest", "backtesting", "forward test", "walk forward", "overfitting", "look ahead", "survivorship"],
+    explanation: "Backtesting replays fixed rules on historical information available at each decision. Avoid look-ahead bias, survivor-only stock lists and tuning repeatedly on the test set. Use chronological training/validation/test periods, realistic costs and separate paper forward testing. Neither a backtest nor paper profit proves future performance.",
+    example: "If a signal needs today's closing price, filling at that same close without a feasible execution assumption can inflate results. Model the next available fill instead.",
+    practice: "Log all tested variants, keep a final time period untouched, and compare net expectancy, drawdown and turnover across regimes.",
+    question: "Should you tune parameters on the final test period?", choices: ["Yes, until profitable", "No; that contaminates the evaluation", "Only for losing trades"], correct: 1,
+  },
+  {
+    id: "psychology", title: "Psychology and trading journal", aliases: ["psychology", "fomo", "revenge", "overtrading", "discipline", "journal", "fear", "greed"],
+    explanation: "Separate decision quality from outcome: a rule-following trade can lose, and a poor decision can win. FOMO, revenge trading and moving a stop to avoid accepting a loss undermine evaluation. Use a checklist, planned pauses and a journal; never increase risk merely to recover losses.",
+    example: "Journal fields: timestamp, setup, entry, stop, target, quantity, expected risk, actual fills, fees, exit reason, emotion and rule adherence.",
+    practice: "Review one good losing trade and one bad winning trade. Identify a process change rather than judging only the P&L.",
+    question: "Does a winning trade prove the decision was sound?", choices: ["Always", "Only if the gain is large", "No"], correct: 2,
+  },
+  {
+    id: "derivatives", title: "Futures, options and leverage", aliases: ["futures", "options", "derivative", "f&o", "leverage", "margin", "call option", "put option", "option chain", "open interest"],
+    explanation: "Futures create contractual exposure; margin is collateral, not the maximum possible loss. Options give buyers rights for a premium and sellers obligations. Buyers can lose the premium; uncovered sellers can face very large losses. Expiry, settlement and contract specifications matter. XOCRISK currently executes equity trades only.",
+    example: "A premium paid for an option can be lost even when your directional view was reasonable, because timing and volatility also affect its price.",
+    practice: "Read current exchange contract specifications and draw expiry payoffs before considering any derivative. Do not assume one lot size or settlement rule applies to every contract.",
+    question: "Is futures margin a guaranteed loss ceiling?", choices: ["No", "Yes", "Only overnight"], correct: 0,
+  },
+  {
+    id: "greeks", title: "Option Greeks and implied volatility", aliases: ["greeks", "delta", "gamma", "theta", "vega", "implied volatility", "iv crush"],
+    explanation: "Delta approximates sensitivity to underlying price; gamma describes changing delta. Theta describes sensitivity to time passing and vega to implied volatility. These are model sensitivities, not fixed promises. An IV fall after an event can offset a favorable underlying move.",
+    example: "Delta 0.5 suggests roughly ₹0.50 option-price change for a small ₹1 underlying move, holding other inputs constant, before contract multipliers.",
+    practice: "Compare hypothetical changes in underlying, time and volatility separately before combining them. This chat does not calculate live Greeks.",
+    question: "Which Greek describes implied-volatility sensitivity?", choices: ["Theta", "Vega", "Gamma"], correct: 1,
+  },
+  {
+    id: "costs", title: "Costs, taxes and paper-trading limits", aliases: ["brokerage", "charges", "tax", "stt", "fees", "paper vs real", "paper trading"],
+    explanation: "Net P&L must account for brokerage, exchange fees, applicable taxes, spread and slippage. Rates depend on product, broker and current rules; verify official schedules instead of using a remembered rate. XOCRISK's zero-cost, simplified virtual fills can overstate real execution performance.",
+    example: "A hypothetical ₹200 gross gain less ₹60 total modeled costs gives ₹140 net; this is an arithmetic example, not a current fee schedule.",
+    practice: "Stress-test each strategy with worse fills and higher costs. Paper success is practice evidence, not proof that real-money trading is suitable.",
+    question: "Which result is more useful for evaluation?", choices: ["Gross gains only", "Best trade only", "Net results with realistic execution assumptions"], correct: 2,
+  },
+];
+
+export const learningSources = [
+  ["Order mechanics — Investor.gov", "https://www.investor.gov/introduction-investing/investing-basics/how-stock-markets-work/types-orders"],
+  ["Position sizing — CME Group", "https://www.cmegroup.com/education/courses/trade-and-risk-management/proper-position-size"],
+  ["Investor and derivatives risks — NSE", "https://www.nseindia.com/static/invest/be-a-smart-investor"],
+  ["Technical indicators — Fidelity", "https://www.fidelity.com/learning-center/trading-investing/technical-analysis/technical-indicator-guide/overview"],
+  ["Diversification — Investor.gov", "https://www.investor.gov/introduction-investing/investing-basics/save-and-invest/diversify-your-investments"],
+] as const;

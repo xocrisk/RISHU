@@ -1,6 +1,7 @@
-// XOCRISK AI: a rule-based assistant. Every answer is written in advance; a few fill in live numbers
-// (prices, market status, the user's account). It never calls a language model.
-import { istDateTime, money, percent, price, signed } from "./format";
+// XOCRISK AI: curated lessons, quizzes, calculations and account-aware responses.
+// Quotes are delayed. This assistant never calls or trains a language model.
+import { istDateTime, money, percent, price, signed } from "./format.ts";
+import { tutorAnswer, type TutorLine } from "./trading-tutor.ts";
 import type { Dashboard, Quote } from "./types";
 
 export type AiContext = { data: Dashboard; quotes: Map<string, Quote>; indices: Map<string, Quote> };
@@ -15,7 +16,7 @@ const marketLine = ({ data }: AiContext) => {
     : `The market is closed${status.reason ? ` (${status.reason})` : ""}. It opens ${istDateTime.format(new Date(status.nextChangeAt))} IST.`;
 };
 const quoteLine = (quote: Quote) =>
-  `${quote.symbol} (${quote.name}) is at ${quote.industry === "Index" ? "" : "₹"}${price(quote.price)}, ${percent(quote.changePercent)} today (${signed(quote.change, price)}). Day range ${price(quote.low)} – ${price(quote.high)}.`;
+  `${quote.symbol} (${quote.name}): delayed quote ${quote.industry === "Index" ? "" : "₹"}${price(quote.price)}, ${percent(quote.changePercent)} (${signed(quote.change, price)}). Day range ${price(quote.low)} – ${price(quote.high)}. Quote time: ${Number.isFinite(Date.parse(quote.marketTime)) ? `${istDateTime.format(new Date(quote.marketTime))} IST` : "unavailable"}; not a live execution price.`;
 
 // ---- answers built from the user's own account
 const activeHoldings = ({ data }: AiContext) => data.holdings.filter((holding) => holding.quantity > 0);
@@ -44,7 +45,7 @@ const winRate = (context: AiContext) => {
   }
   const wins = closed.filter((holding) => holding.realizedPnl > 0).length;
   const average = closed.reduce((total, holding) => total + holding.realizedPnl, 0) / closed.length;
-  return `Win rate: ${Math.round((wins / closed.length) * 100)}% (${wins} of ${closed.length} stocks you sold ended in profit). Average realised P&L per stock: ${signed(average)}. ${overall} A 40–50% win rate is fine if your winners are bigger than your losers.`;
+  return `Profitable-symbol ratio: ${Math.round((wins / closed.length) * 100)}% (${wins} of ${closed.length} symbols with nonzero net realised P&L are positive). Average realised P&L per symbol: ${signed(average)}. This is not a per-trade win rate: holdings aggregate multiple exits, and breakeven symbols are excluded. ${overall}`;
 };
 
 const diversification = (context: AiContext) => {
@@ -260,7 +261,7 @@ const intents: Intent[] = [
   { patterns: [/thank|thanks|\bthx\b|\bty\b|dhanyavad|shukriya/], answer: "You're welcome! Happy trading." },
   { patterns: [/^(bye|goodbye|see you|cya|good night|gn)\b/], answer: "Bye! See you at the next market open." },
   { patterns: [/who are you|what are you|your name|xocrisk ai/],
-    answer: "I'm XOCRISK AI, your practice-trading assistant. I answer common questions about the stock market and this app, and I can look up live prices. I'm rule-based, so I only know the answers I've been taught." },
+    answer: "I'm XOCRISK AI, your practice-trading tutor. Ask for the trading syllabus, lessons, examples, quizzes, position sizing, your account or delayed quotes. I use curated material and calculations; I don't train myself or predict prices." },
 
   // ---- live data
   { patterns: [/(is|are) (the )?market(s)? (open|closed|close)/, /market (timing|time|hours)/, /when (does|will) (the )?market (open|close)/, /trading (hours|time)/],
@@ -339,7 +340,7 @@ const intents: Intent[] = [
     answer: "I can't give investment advice or stock tips. A good habit: pick a company you understand, read why its price is moving, decide your entry, target and stop-loss, then practise with a small quantity here." },
 ];
 
-const fallback = "I don't know that one yet. Try asking: \"paper trading kya hai?\", \"is the market open?\", \"price of reliance\", \"market vs limit order\", \"aaj ka P&L\", \"meri galtiyan batao\" or \"risk management kaise seekhun?\" English, Hindi and Hinglish all work.";
+const fallback = "I don't have a reliable answer for that yet. Ask for the trading syllabus, a specific topic (RSI, candles, risk management, backtesting, options), your account summary or a delayed stock quote. After a lesson, try example, quiz or next lesson. I understand English and common Hindi/Hinglish phrases; try rephrasing if I miss your question.";
 
 // Common misspellings and Hindi (Devanagari) words, rewritten before matching so
 // "relience stok kharidna hai" or "पेपर ट्रेडिंग क्या है" find the right answer.
@@ -385,9 +386,25 @@ function findQuote(text: string, context: AiContext): Quote | undefined {
   return named;
 }
 
-export function answer(input: string, context: AiContext): string {
+export function guardedAnswer(input: string, context: AiContext): string | null {
+  const text = normalize(input);
+  // Risk requests must not be bypassed by a stock name or a learning keyword.
+  for (const intent of paperTradingIntents.slice(0, 5)) {
+    if (intent.patterns.some(pattern => pattern.test(text))) return typeof intent.answer === "function" ? intent.answer(context, text) : intent.answer;
+  }
+  if (/\b(guaranteed?|sure ?shot|100%)\b.*\b(profit|return|strategy|win)|\b(best stock|stock tip|recommend.*stock)\b/.test(text)) {
+    return "I cannot promise returns or choose a winning stock. Ask for the trading syllabus, strategy testing or risk management to learn how to evaluate an idea.";
+  }
+  return null;
+}
+
+export function answer(input: string, context: AiContext, history: TutorLine[] = []): string {
   const text = normalize(input);
   if (!text) return fallback;
+  const guarded = guardedAnswer(text, context);
+  if (guarded) return guarded;
+  const teaching = tutorAnswer(text, history);
+  if (teaching) return teaching;
   // A direct price question wins over topic answers ("price of nifty" should quote it, not explain it).
   if (/\b(price|rate|quote|kitna|trading at)\b/.test(text)) {
     const quote = findQuote(text, context);
@@ -410,4 +427,4 @@ export function answer(input: string, context: AiContext): string {
   return fallback;
 }
 
-export const suggestions = ["Hi", "Paper trading kya hai?", "Is the market open?", "Price of Reliance", "Aaj ka P&L kitna hai?", "Market vs limit order", "Meri galtiyan batao", "Position sizing kaise karun?", "Top gainers today", "Risk management kaise seekhun?", "Mera win rate kitna hai?", "What is the championship?"];
+export const suggestions = ["Market scan karo", "Reliance analyze karo", "Opening range breakout scan", "Puri trading sikhao", "Lesson 1", "Next lesson", "Example", "Quiz", "RSI kya hai?", "Position sizing", "Backtesting", "Sources", "Meri galtiyan batao"];
